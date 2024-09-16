@@ -16,11 +16,22 @@ def load_data():
 data = load_data()
 
 st.title("LSTM & SARIMA Forecasting of General Index")
-st.write("This app predicts the General Index for the next decade using LSTM and SARIMA models.")
 
-# Preprocess the data
-data['Date'] = pd.to_datetime(data['Date'])
-data.set_index('Date', inplace=True)
+# Display dataset and column names for debugging
+st.write("### Preview of Dataset")
+st.write(data.head())
+
+# Display column names for clarity
+st.write("### Columns in the Dataset")
+st.write(data.columns)
+
+# Check if 'Date' column exists, if not adjust accordingly
+if 'Date' in data.columns:
+    data['Date'] = pd.to_datetime(data['Date'])
+    data.set_index('Date', inplace=True)
+else:
+    st.error("Error: 'Date' column not found in dataset. Please check the file.")
+    st.stop()
 
 # Plot historical data using Altair
 st.write("### Historical Data for General Index")
@@ -28,6 +39,8 @@ historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
     x='Date:T', y='General Index:Q'
 ).properties(width=700, height=400)
 st.altair_chart(historical_chart)
+
+# Continue with the rest of the code...
 
 # Split data into train and test sets
 train_data = data[:'2023']
