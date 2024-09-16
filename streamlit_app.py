@@ -20,7 +20,7 @@ data = load_data()
 data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), freq='MS')
 data.set_index('Generated Date', inplace=True)
 
-st.title("LSTM & SARIMA Forecasting of General index")
+st.title("LSTM & SARIMA Forecasting of General Index")
 
 # Display dataset preview
 st.write("### Preview of Dataset")
@@ -30,17 +30,17 @@ st.write(data.head())
 st.write("### Columns in the Dataset:")
 st.write(data.columns.tolist())
 
-# Check if 'General index' exists in the dataset
-if 'General index' not in data.columns:
-    st.error("Error: 'General index' column not found in the dataset.")
+# Check if 'General Index' exists in the dataset
+if 'General Index' not in data.columns:
+    st.error("Error: 'General Index' column not found in the dataset.")
     st.stop()
 
 # Plot historical data using Altair
-st.write("### Historical Data for General index")
+st.write("### Historical Data for General Index")
 historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
-    x='Generated Date:T', y='General index:Q'
+    x='Generated Date:T', y='General Index:Q'
 ).properties(
-    width=700, height=400, title="Historical General index Data"
+    width=700, height=400, title="Historical General Index Data"
 )
 st.altair_chart(historical_chart)
 
@@ -49,10 +49,10 @@ train_data = data[:'2022-12']  # Up to December 2022 for training
 valid_data = data['2023-01':'2023-12']  # Full year 2023 for validation
 test_data = data['2024-01-01':]  # Data from 2024 onwards for testing
 
-# Normalize the General index for LSTM
+# Normalize the General Index for LSTM
 scaler = MinMaxScaler()
-train_scaled = scaler.fit_transform(train_data[['General index']])
-valid_scaled = scaler.transform(valid_data[['General index']])
+train_scaled = scaler.fit_transform(train_data[['General Index']])
+valid_scaled = scaler.transform(valid_data[['General Index']])
 
 # Prepare data for LSTM model
 def create_sequences(data, seq_length):
@@ -68,9 +68,30 @@ seq_length = 12  # Using 12 months (1 year) for sequence length
 X_train, y_train = create_sequences(train_scaled, seq_length)
 X_valid, y_valid = create_sequences(valid_scaled, seq_length)
 
-# Reshape X_train and X_valid for LSTM model
+# Check dimensions before reshaping
+st.write(f"Shape of X_train: {X_train.shape}")
+st.write(f"Shape of y_train: {y_train.shape}")
+st.write(f"Shape of X_valid: {X_valid.shape}")
+st.write(f"Shape of y_valid: {y_valid.shape}")
+
+# Check if the validation set is sufficient
+if X_valid.shape[0] == 0:
+    st.error("Error: Validation set is too small to create sequences.")
+    st.stop()
+
+# Ensure correct reshaping
+if len(X_valid.shape) == 2:
+    try:
+        X_valid = np.reshape(X_valid, (X_valid.shape[0], X_valid.shape[1], 1))
+    except IndexError as e:
+        st.error(f"IndexError during reshaping: {e}")
+        st.stop()
+else:
+    st.error("Error: X_valid does not have the expected number of dimensions.")
+    st.stop()
+
+# Reshape X_train for LSTM model
 X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
-X_valid = np.reshape(X_valid, (X_valid.shape[0], X_valid.shape[1], 1))
 
 # Build the LSTM model
 lstm_model = Sequential()
@@ -105,11 +126,11 @@ lstm_forecast = pd.DataFrame(predictions_lstm, index=future_dates_lstm, columns=
 # Evaluate LSTM model
 val_predictions_lstm = lstm_model.predict(X_valid)
 val_predictions_lstm_rescaled = scaler.inverse_transform(val_predictions_lstm)
-lstm_valid_mse = mean_squared_error(valid_data['General index'][seq_length:], val_predictions_lstm_rescaled)
+lstm_valid_mse = mean_squared_error(valid_data['General Index'][seq_length:], val_predictions_lstm_rescaled)
 st.write(f"LSTM Validation MSE: {lstm_valid_mse:.4f}")
 
 # Build the SARIMA model
-sarima_model = SARIMAX(train_data['General index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+sarima_model = SARIMAX(train_data['General Index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
 sarima_fit = sarima_model.fit(disp=False)
 
 # Predict future values using SARIMA
@@ -121,7 +142,7 @@ sarima_forecast_df.index = pd.date_range(start='2024-03-01', periods=future_step
 
 # Evaluate SARIMA model
 sarima_valid_pred = sarima_fit.get_forecast(steps=len(valid_data)).predicted_mean
-sarima_valid_mse = mean_squared_error(valid_data['General index'], sarima_valid_pred)
+sarima_valid_mse = mean_squared_error(valid_data['General Index'], sarima_valid_pred)
 st.write(f"SARIMA Validation MSE: {sarima_valid_mse:.4f}")
 
 # Plot the LSTM and SARIMA future predictions
