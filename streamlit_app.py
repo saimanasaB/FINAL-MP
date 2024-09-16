@@ -15,7 +15,7 @@ def load_data():
 
 data = load_data()
 
-st.title("LSTM & SARIMA Forecasting of General index")
+st.title("LSTM & SARIMA Forecasting of General Index")
 
 # Display dataset preview
 st.write("### Preview of Dataset")
@@ -25,22 +25,16 @@ st.write(data.head())
 st.write("### Columns in the Dataset:")
 st.write(data.columns.tolist())
 
-# Skip 'Date' column check since it's not in the dataset
-if 'General index' not in data.columns:
-    st.error("Error: 'General index' column not found in the dataset.")
-    st.stop()
-
-# Generate a time index assuming monthly intervals
-st.write("Since no 'Date' column is provided, generating a time index assuming monthly intervals.")
+# Since 'Date' column is not in the dataset, generate a time index
 data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), freq='MS')
 data.set_index('Generated Date', inplace=True)
 
 # Plot historical data using Altair
-st.write("### Historical Data for General index")
+st.write("### Historical Data for General Index")
 historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
-    x='Generated Date:T', y='General index:Q'
+    x='Generated Date:T', y='General Index:Q'
 ).properties(
-    width=700, height=400, title="Historical General index Data"
+    width=700, height=400, title="Historical General Index Data"
 )
 st.altair_chart(historical_chart)
 
@@ -49,10 +43,10 @@ split_index = int(len(data) * 0.8)
 train_data = data.iloc[:split_index]
 val_data = data.iloc[split_index:]
 
-# Normalize the General index for LSTM
+# Normalize the General Index for LSTM
 scaler = MinMaxScaler()
-train_scaled = scaler.fit_transform(train_data[['General index']])
-val_scaled = scaler.transform(val_data[['General index']])
+train_scaled = scaler.fit_transform(train_data[['General Index']])
+val_scaled = scaler.transform(val_data[['General Index']])
 
 # Prepare data for LSTM model
 def create_sequences(data, seq_length):
@@ -113,10 +107,8 @@ validation_chart = alt.Chart(val_df).mark_line().encode(
 )
 st.altair_chart(validation_chart)
 
-# Continue with SARIMA model and predictions...
-
 # Build the SARIMA model
-sarima_model = SARIMAX(train_data['General index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+sarima_model = SARIMAX(train_data['General Index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
 sarima_fit = sarima_model.fit(disp=False)
 
 # Predict future 3 years using SARIMA
@@ -126,22 +118,12 @@ sarima_forecast_df = sarima_forecast.conf_int(alpha=0.05)
 sarima_forecast_df['SARIMA Prediction'] = sarima_forecast.predicted_mean
 sarima_forecast_df.index = pd.date_range(start='2024-03-01', periods=future_steps_sarima, freq='MS')
 
-# Plot the LSTM and SARIMA future predictions
-st.write("### Future Predictions (LSTM and SARIMA)")
-lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
-    x='index:T', y='LSTM Prediction:Q'
-).properties(width=700, height=400)
-
+# Plot the SARIMA future predictions using Altair
+st.write("### SARIMA Future Predictions")
 sarima_chart = alt.Chart(sarima_forecast_df.reset_index()).mark_line(color='green').encode(
-    x='index:T', y='SARIMA Prediction:Q'
-).properties(width=700, height=400)
-
-combined_chart = lstm_chart + sarima_chart
-st.altair_chart(combined_chart)
-
-# Display prediction data
-st.write("### LSTM Predictions for Next 10 Years")
-st.write(lstm_forecast)
-
-st.write("### SARIMA Predictions for Next 3 Years")
-st.write(sarima_forecast_df[['SARIMA Prediction']])
+    x='index:T',
+    y='SARIMA Prediction:Q'
+).properties(
+    width=700, height=400, title="SARIMA Future Predictions"
+)
+st.altair_chart(sarima_chart)
