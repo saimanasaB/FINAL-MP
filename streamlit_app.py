@@ -11,7 +11,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Load the dataset
-data_file = "cleaned_data (1).csv"
+data_file = "cleaned_data.csv"
 @st.cache
 def load_data(file):
     return pd.read_csv(file)
