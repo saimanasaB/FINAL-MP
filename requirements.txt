@@ -1,0 +1,7 @@
+streamlit
+altair
+scikit-learn
+pandas
+numpy
+tensorflow
+statsmodels
