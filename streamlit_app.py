@@ -2,92 +2,111 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import altair as alt
-from keras.models import Sequential
-from keras.layers import LSTM, Dense
-from statsmodels.tsa.statespace.sarimax import SARIMAX
 from sklearn.preprocessing import MinMaxScaler
-import datetime
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
 
-# Load the data
-st.title("General Index Prediction with LSTM and SARIMA")
+# Load the dataset
+@st.cache
+def load_data():
+    return pd.read_csv('cleaned_data.csv')
 
-uploaded_file = st.file_uploader("Upload your CSV file", type=["csv"])
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
-    st.write("Data Preview:", df.head())
+data = load_data()
 
-    # Extracting necessary columns
-    if 'date' in df.columns and 'general_index' in df.columns:
-        df['date'] = pd.to_datetime(df['date'])
-        df.set_index('date', inplace=True)
-        general_index = df['general_index'].values
+st.title("LSTM & SARIMA Forecasting of General Index")
+st.write("This app predicts the General Index for the next decade using LSTM and SARIMA models.")
 
-        # Splitting the data for LSTM and SARIMA
-        train_data = df[df.index < '2025']
-        train_values = train_data['general_index'].values
+# Preprocess the data
+data['Date'] = pd.to_datetime(data['Date'])
+data.set_index('Date', inplace=True)
 
-        # LSTM Model
-        st.subheader("LSTM Model: Predicting 2025 to 2035")
-        scaler = MinMaxScaler()
-        scaled_train = scaler.fit_transform(train_values.reshape(-1, 1))
+# Plot historical data using Altair
+st.write("### Historical Data for General Index")
+historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
+    x='Date:T', y='General Index:Q'
+).properties(width=700, height=400)
+st.altair_chart(historical_chart)
 
-        X_train = []
-        y_train = []
-        time_step = 60  # you can adjust this step
-        for i in range(time_step, len(scaled_train)):
-            X_train.append(scaled_train[i - time_step:i, 0])
-            y_train.append(scaled_train[i, 0])
+# Split data into train and test sets
+train_data = data[:'2023']
+test_data = data['2024-01-01':]
 
-        X_train, y_train = np.array(X_train), np.array(y_train)
-        X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
+# Normalize the General Index for LSTM
+scaler = MinMaxScaler()
+train_scaled = scaler.fit_transform(train_data[['General Index']])
 
-        model = Sequential()
-        model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
-        model.add(LSTM(units=50))
-        model.add(Dense(1))
-        model.compile(optimizer='adam', loss='mean_squared_error')
+# Prepare data for LSTM model
+def create_sequences(data, seq_length):
+    xs, ys = [], []
+    for i in range(len(data)-seq_length):
+        x = data[i:i+seq_length]
+        y = data[i+seq_length]
+        xs.append(x)
+        ys.append(y)
+    return np.array(xs), np.array(ys)
 
-        model.fit(X_train, y_train, epochs=10, batch_size=32)
+seq_length = 12  # Using 12 months (1 year) for sequence length
+X_train, y_train = create_sequences(train_scaled, seq_length)
 
-        # Generating future predictions for 2025-2035
-        future_predictions = []
-        last_sequence = scaled_train[-time_step:]
-        for _ in range(10 * 12):  # predicting for 10 years (assuming monthly data)
-            last_sequence = last_sequence.reshape((1, time_step, 1))
-            next_pred = model.predict(last_sequence)[0, 0]
-            future_predictions.append(next_pred)
-            last_sequence = np.append(last_sequence[:, 1:, :], [[next_pred]], axis=1)
+# Reshape X_train for LSTM model
+X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
 
-        future_predictions = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
+# Build the LSTM model
+lstm_model = Sequential()
+lstm_model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
+lstm_model.add(LSTM(units=50))
+lstm_model.add(Dense(1))
+lstm_model.compile(optimizer='adam', loss='mean_squared_error')
 
-        future_dates = pd.date_range(start='2025-01-01', periods=len(future_predictions), freq='M')
-        lstm_df = pd.DataFrame({'date': future_dates, 'predicted_index': future_predictions.flatten()})
+# Train the LSTM model
+lstm_model.fit(X_train, y_train, epochs=20, batch_size=32)
 
-        # Plotting LSTM results
-        lstm_chart = alt.Chart(lstm_df).mark_line().encode(
-            x='date:T',
-            y='predicted_index:Q'
-        ).properties(
-            title='LSTM Predictions (2025-2035)'
-        )
-        st.altair_chart(lstm_chart)
+# Predict future 10 years using LSTM
+future_steps = 10 * 12  # Predicting 10 years (120 months)
+last_sequence = train_scaled[-seq_length:]
+predictions_lstm = []
 
-        # SARIMA Model
-        st.subheader("SARIMA Model: Predicting 2025 to 2027")
-        sarima_model = SARIMAX(train_values, order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
-        sarima_results = sarima_model.fit(disp=False)
+for _ in range(future_steps):
+    pred = lstm_model.predict(np.reshape(last_sequence, (1, seq_length, 1)))
+    predictions_lstm.append(pred[0, 0])
+    last_sequence = np.append(last_sequence[1:], pred[0, 0]).reshape(seq_length, 1)
 
-        future_sarima_predictions = sarima_results.get_forecast(steps=3 * 12).predicted_mean
-        sarima_future_dates = pd.date_range(start='2025-01-01', periods=len(future_sarima_predictions), freq='M')
-        sarima_df = pd.DataFrame({'date': sarima_future_dates, 'predicted_index': future_sarima_predictions})
+# Inverse transform the predictions to original scale
+predictions_lstm = scaler.inverse_transform(np.array(predictions_lstm).reshape(-1, 1))
 
-        # Plotting SARIMA results
-        sarima_chart = alt.Chart(sarima_df).mark_line(color='red').encode(
-            x='date:T',
-            y='predicted_index:Q'
-        ).properties(
-            title='SARIMA Predictions (2025-2027)'
-        )
-        st.altair_chart(sarima_chart)
-    else:
-        st.error("Make sure the CSV contains 'date' and 'general_index' columns")
+# Create a DataFrame for LSTM future predictions
+future_dates_lstm = pd.date_range(start='2024-03-01', periods=future_steps, freq='MS')
+lstm_forecast = pd.DataFrame(predictions_lstm, index=future_dates_lstm, columns=['LSTM Prediction'])
+
+# Build the SARIMA model
+sarima_model = SARIMAX(train_data['General Index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+sarima_fit = sarima_model.fit(disp=False)
+
+# Predict future 3 years using SARIMA
+future_steps_sarima = 3 * 12  # 3 years (36 months)
+sarima_forecast = sarima_fit.get_forecast(steps=future_steps_sarima)
+sarima_forecast_df = sarima_forecast.conf_int(alpha=0.05)
+sarima_forecast_df['SARIMA Prediction'] = sarima_forecast.predicted_mean
+sarima_forecast_df.index = pd.date_range(start='2024-03-01', periods=future_steps_sarima, freq='MS')
+
+# Plot the LSTM and SARIMA future predictions
+st.write("### Future Predictions (LSTM and SARIMA)")
+lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
+    x='index:T', y='LSTM Prediction:Q'
+).properties(width=700, height=400)
+
+sarima_chart = alt.Chart(sarima_forecast_df.reset_index()).mark_line(color='green').encode(
+    x='index:T', y='SARIMA Prediction:Q'
+).properties(width=700, height=400)
+
+combined_chart = lstm_chart + sarima_chart
+st.altair_chart(combined_chart)
+
+# Display prediction data
+st.write("### LSTM Predictions for Next 10 Years")
+st.write(lstm_forecast)
+
+st.write("### SARIMA Predictions for Next 3 Years")
+st.write(sarima_forecast_df[['SARIMA Prediction']])
