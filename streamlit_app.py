@@ -9,7 +9,7 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 
 # Load the dataset
-@st.cache
+@st.cache_data
 def load_data():
     return pd.read_csv('cleaned_data.csv')
 
@@ -26,21 +26,39 @@ st.write("### Columns in the Dataset")
 st.write(data.columns)
 
 # Check if 'Date' column exists, if not adjust accordingly
-if 'Date' in data.columns:
-    data['Date'] = pd.to_datetime(data['Date'])
-    data.set_index('Date', inplace=True)
-else:
-    st.error("Error: 'Date' column not found in dataset. Please check the file.")
+if 'Date' not in data.columns:
+    if 'date' in data.columns:
+        st.warning("'Date' column not found, using 'date' instead. Renaming...")
+        data.rename(columns={'date': 'Date'}, inplace=True)
+    elif 'Timestamp' in data.columns:
+        st.warning("'Date' column not found, using 'Timestamp' instead. Renaming...")
+        data.rename(columns={'Timestamp': 'Date'}, inplace=True)
+    else:
+        st.error("Error: 'Date' column not found in dataset. Please check the file.")
+        st.write("Columns in the Dataset:", data.columns)
+        st.stop()
+
+# Convert the 'Date' column to datetime
+data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
+if data['Date'].isnull().any():
+    st.error("Error: Some entries in the 'Date' column could not be converted to datetime. Please check the data.")
+    st.write("Rows with invalid Date values:")
+    st.write(data[data['Date'].isnull()])
     st.stop()
+
+# Set 'Date' as the index
+data.set_index('Date', inplace=True)
 
 # Plot historical data using Altair
 st.write("### Historical Data for General Index")
 historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
-    x='Date:T', y='General Index:Q'
-).properties(width=700, height=400)
+    x=alt.X('Date:T', title='Date'),
+    y=alt.Y('General Index:Q', title='General Index'),
+    tooltip=['Date:T', 'General Index:Q']
+).properties(
+    width=700, height=400, title="Historical General Index Data"
+)
 st.altair_chart(historical_chart)
-
-# Continue with the rest of the code...
 
 # Split data into train and test sets
 train_data = data[:'2023']
