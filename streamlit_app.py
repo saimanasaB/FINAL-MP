@@ -15,7 +15,7 @@ def load_data():
 
 data = load_data()
 
-st.title("LSTM & SARIMA Forecasting of General Index")
+st.title("LSTM & SARIMA Forecasting of General index")
 
 # Display dataset preview
 st.write("### Preview of Dataset")
@@ -26,8 +26,8 @@ st.write("### Columns in the Dataset:")
 st.write(data.columns.tolist())
 
 # Skip 'Date' column check since it's not in the dataset
-if 'General Index' not in data.columns:
-    st.error("Error: 'General Index' column not found in the dataset.")
+if 'General index' not in data.columns:
+    st.error("Error: 'General index' column not found in the dataset.")
     st.stop()
 
 # Generate a time index assuming monthly intervals
@@ -36,11 +36,11 @@ data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), fr
 data.set_index('Generated Date', inplace=True)
 
 # Plot historical data using Altair
-st.write("### Historical Data for General Index")
+st.write("### Historical Data for General index")
 historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
-    x='Generated Date:T', y='General Index:Q'
+    x='Generated Date:T', y='General index:Q'
 ).properties(
-    width=700, height=400, title="Historical General Index Data"
+    width=700, height=400, title="Historical General index Data"
 )
 st.altair_chart(historical_chart)
 
@@ -49,10 +49,10 @@ split_index = int(len(data) * 0.8)
 train_data = data.iloc[:split_index]
 val_data = data.iloc[split_index:]
 
-# Normalize the General Index for LSTM
+# Normalize the General index for LSTM
 scaler = MinMaxScaler()
-train_scaled = scaler.fit_transform(train_data[['General Index']])
-val_scaled = scaler.transform(val_data[['General Index']])
+train_scaled = scaler.fit_transform(train_data[['General index']])
+val_scaled = scaler.transform(val_data[['General index']])
 
 # Prepare data for LSTM model
 def create_sequences(data, seq_length):
