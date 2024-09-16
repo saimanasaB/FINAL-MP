@@ -17,48 +17,31 @@ data = load_data()
 
 st.title("LSTM & SARIMA Forecasting of General Index")
 
-# Display dataset and column names for debugging
+# Display dataset preview
 st.write("### Preview of Dataset")
 st.write(data.head())
 
-# Display column names for clarity
-st.write("### Columns in the Dataset")
-st.write(data.columns)
+# Display columns in the dataset
+st.write("### Columns in the Dataset:")
+st.write(data.columns.tolist())
 
-# Print column names for debugging
-st.write("Here are the columns detected in the dataset:", list(data.columns))
-
-# Check if 'Date' column exists, and handle possible variations
-if 'Date' in data.columns:
-    st.write("'Date' column found, proceeding with datetime conversion.")
-elif 'date' in data.columns:
-    st.warning("'Date' column not found, but 'date' column is detected. Renaming...")
-    data.rename(columns={'date': 'Date'}, inplace=True)
-elif 'Timestamp' in data.columns:
-    st.warning("'Date' column not found, but 'Timestamp' column is detected. Renaming...")
-    data.rename(columns={'Timestamp': 'Date'}, inplace=True)
-else:
-    st.error("Error: 'Date' column not found in dataset. Please check the file.")
-    st.write("Columns found in the dataset:", list(data.columns))
+# Skip 'Date' column check since it's not in the dataset
+# Assume we have a column for 'General Index' or similar data
+if 'General Index' not in data.columns:
+    st.error("Error: 'General Index' column not found in the dataset.")
     st.stop()
 
-# Convert the 'Date' column to datetime
-data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
-if data['Date'].isnull().any():
-    st.error("Error: Some entries in the 'Date' column could not be converted to datetime. Please check the data.")
-    st.write("Rows with invalid Date values:")
-    st.write(data[data['Date'].isnull()])
-    st.stop()
+# If there are no dates, generate a simple index for plotting purposes
+# Assume monthly frequency and starting from an arbitrary date, like '2020-01-01'
+st.write("Since no 'Date' column is provided, generating a time index assuming monthly intervals.")
 
-# Set 'Date' as the index
-data.set_index('Date', inplace=True)
+data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), freq='MS')
+data.set_index('Generated Date', inplace=True)
 
 # Plot historical data using Altair
 st.write("### Historical Data for General Index")
 historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
-    x=alt.X('Date:T', title='Date'),
-    y=alt.Y('General Index:Q', title='General Index'),
-    tooltip=['Date:T', 'General Index:Q']
+    x='Generated Date:T', y='General Index:Q'
 ).properties(
     width=700, height=400, title="Historical General Index Data"
 )
@@ -75,7 +58,7 @@ train_scaled = scaler.fit_transform(train_data[['General Index']])
 # Prepare data for LSTM model
 def create_sequences(data, seq_length):
     xs, ys = [], []
-    for i in range(len(data)-seq_length):
+    for i in range(len(data) - seq_length):
         x = data[i:i+seq_length]
         y = data[i+seq_length]
         xs.append(x)
