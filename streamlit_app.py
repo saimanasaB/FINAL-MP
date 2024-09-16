@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
+import altair as alt
 from sklearn.preprocessing import MinMaxScaler
 from keras.models import Sequential
 from keras.layers import Dense, LSTM
@@ -86,30 +86,41 @@ sarima_order = (1, 1, 1)  # Adjust based on your dataset
 seasonal_order = (1, 1, 1, 12)  # Adjust based on your dataset (assuming monthly seasonality)
 sarima_predictions = sarima_forecast(data[index_column], sarima_order, seasonal_order, steps=36)
 
-# Plotting results
-st.subheader("LSTM Predictions for Next 10 Years (2025-2035)")
+# Prepare DataFrames for plotting with Altair
 lstm_dates = pd.date_range(start='2025-01-01', periods=len(lstm_predictions), freq='M')
-lstm_pred_df = pd.DataFrame(lstm_predictions, index=lstm_dates, columns=['LSTM_Prediction'])
+lstm_pred_df = pd.DataFrame({'Date': lstm_dates, 'LSTM_Prediction': lstm_predictions.flatten()})
 
-fig, ax = plt.subplots()
-ax.plot(data.index, data[index_column], label="Actual")
-ax.plot(lstm_pred_df.index, lstm_pred_df['LSTM_Prediction'], label="LSTM Prediction")
-plt.legend()
-plt.title("LSTM Predictions")
-plt.xlabel("Date")
-plt.ylabel("General Index")
-st.pyplot(fig)
-
-st.subheader("SARIMA Predictions for Next 3 Years (2025-2027)")
 sarima_dates = pd.date_range(start='2025-01-01', periods=len(sarima_predictions), freq='M')
-sarima_pred_df = pd.DataFrame(sarima_predictions, index=sarima_dates, columns=['SARIMA_Prediction'])
+sarima_pred_df = pd.DataFrame({'Date': sarima_dates, 'SARIMA_Prediction': sarima_predictions})
 
-fig, ax = plt.subplots()
-ax.plot(data.index, data[index_column], label="Actual")
-ax.plot(sarima_pred_df.index, sarima_pred_df['SARIMA_Prediction'], label="SARIMA Prediction")
-plt.legend()
-plt.title("SARIMA Predictions")
-plt.xlabel("Date")
-plt.ylabel("General Index")
-st.pyplot(fig)
+# Plotting LSTM predictions with Altair
+st.subheader("LSTM Predictions for Next 10 Years (2025-2035)")
+lstm_actual_df = pd.DataFrame({'Date': data.index, 'Actual': data[index_column].values})
 
+lstm_combined = pd.concat([lstm_actual_df, lstm_pred_df.set_index('Date')], axis=1).reset_index()
+
+lstm_chart = alt.Chart(lstm_combined.melt('Date')).mark_line().encode(
+    x='Date:T',
+    y=alt.Y('value:Q', title="General Index"),
+    color='variable:N'
+).properties(
+    title="LSTM Predictions vs Actual"
+)
+
+st.altair_chart(lstm_chart, use_container_width=True)
+
+# Plotting SARIMA predictions with Altair
+st.subheader("SARIMA Predictions for Next 3 Years (2025-2027)")
+sarima_actual_df = pd.DataFrame({'Date': data.index, 'Actual': data[index_column].values})
+
+sarima_combined = pd.concat([sarima_actual_df, sarima_pred_df.set_index('Date')], axis=1).reset_index()
+
+sarima_chart = alt.Chart(sarima_combined.melt('Date')).mark_line().encode(
+    x='Date:T',
+    y=alt.Y('value:Q', title="General Index"),
+    color='variable:N'
+).properties(
+    title="SARIMA Predictions vs Actual"
+)
+
+st.altair_chart(sarima_chart, use_container_width=True)
