@@ -25,18 +25,22 @@ st.write(data.head())
 st.write("### Columns in the Dataset")
 st.write(data.columns)
 
-# Check if 'Date' column exists, if not adjust accordingly
-if 'Date' not in data.columns:
-    if 'date' in data.columns:
-        st.warning("'Date' column not found, using 'date' instead. Renaming...")
-        data.rename(columns={'date': 'Date'}, inplace=True)
-    elif 'Timestamp' in data.columns:
-        st.warning("'Date' column not found, using 'Timestamp' instead. Renaming...")
-        data.rename(columns={'Timestamp': 'Date'}, inplace=True)
-    else:
-        st.error("Error: 'Date' column not found in dataset. Please check the file.")
-        st.write("Columns in the Dataset:", data.columns)
-        st.stop()
+# Print column names for debugging
+st.write("Here are the columns detected in the dataset:", list(data.columns))
+
+# Check if 'Date' column exists, and handle possible variations
+if 'Date' in data.columns:
+    st.write("'Date' column found, proceeding with datetime conversion.")
+elif 'date' in data.columns:
+    st.warning("'Date' column not found, but 'date' column is detected. Renaming...")
+    data.rename(columns={'date': 'Date'}, inplace=True)
+elif 'Timestamp' in data.columns:
+    st.warning("'Date' column not found, but 'Timestamp' column is detected. Renaming...")
+    data.rename(columns={'Timestamp': 'Date'}, inplace=True)
+else:
+    st.error("Error: 'Date' column not found in dataset. Please check the file.")
+    st.write("Columns found in the dataset:", list(data.columns))
+    st.stop()
 
 # Convert the 'Date' column to datetime
 data['Date'] = pd.to_datetime(data['Date'], errors='coerce')
