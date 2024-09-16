@@ -15,7 +15,7 @@ def load_data():
 
 data = load_data()
 
-st.title("LSTM & SARIMA Forecasting of General Index")
+st.title("LSTM & SARIMA Forecasting of General index")
 
 # Display dataset preview
 st.write("### Preview of Dataset")
@@ -26,9 +26,9 @@ st.write("### Columns in the Dataset:")
 st.write(data.columns.tolist())
 
 # Skip 'Date' column check since it's not in the dataset
-# Assume we have a column for 'General Index' or similar data
-if 'General Index' not in data.columns:
-    st.error("Error: 'General Index' column not found in the dataset.")
+# Assume we have a column for 'General index' or similar data
+if 'General index' not in data.columns:
+    st.error("Error: 'General index' column not found in the dataset.")
     st.stop()
 
 # If there are no dates, generate a simple index for plotting purposes
@@ -39,11 +39,11 @@ data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), fr
 data.set_index('Generated Date', inplace=True)
 
 # Plot historical data using Altair
-st.write("### Historical Data for General Index")
+st.write("### Historical Data for General index")
 historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
-    x='Generated Date:T', y='General Index:Q'
+    x='Generated Date:T', y='General index:Q'
 ).properties(
-    width=700, height=400, title="Historical General Index Data"
+    width=700, height=400, title="Historical General index Data"
 )
 st.altair_chart(historical_chart)
 
@@ -51,9 +51,9 @@ st.altair_chart(historical_chart)
 train_data = data[:'2023']
 test_data = data['2024-01-01':]
 
-# Normalize the General Index for LSTM
+# Normalize the General index for LSTM
 scaler = MinMaxScaler()
-train_scaled = scaler.fit_transform(train_data[['General Index']])
+train_scaled = scaler.fit_transform(train_data[['General index']])
 
 # Prepare data for LSTM model
 def create_sequences(data, seq_length):
@@ -99,7 +99,7 @@ future_dates_lstm = pd.date_range(start='2024-03-01', periods=future_steps, freq
 lstm_forecast = pd.DataFrame(predictions_lstm, index=future_dates_lstm, columns=['LSTM Prediction'])
 
 # Build the SARIMA model
-sarima_model = SARIMAX(train_data['General Index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+sarima_model = SARIMAX(train_data['General index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
 sarima_fit = sarima_model.fit(disp=False)
 
 # Predict future 3 years using SARIMA
