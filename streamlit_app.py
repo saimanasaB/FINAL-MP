@@ -49,6 +49,12 @@ train_data = data[:'2022-12']  # Up to December 2022 for training
 valid_data = data['2023-01':'2023-12']  # Full year 2023 for validation
 test_data = data['2024-01-01':]  # Data from 2024 onwards for testing
 
+# Check if the validation set is large enough
+seq_length = 12
+if len(valid_data) < seq_length:
+    st.error("Error: Validation set is too small to create sequences.")
+    st.stop()
+
 # Normalize the General index for LSTM
 scaler = MinMaxScaler()
 train_scaled = scaler.fit_transform(train_data[['General index']])
@@ -64,7 +70,7 @@ def create_sequences(data, seq_length):
         ys.append(y)
     return np.array(xs), np.array(ys)
 
-seq_length = 12  # Using 12 months (1 year) for sequence length
+# Create sequences for training and validation
 X_train, y_train = create_sequences(train_scaled, seq_length)
 X_valid, y_valid = create_sequences(valid_scaled, seq_length)
 
@@ -74,24 +80,9 @@ st.write(f"Shape of y_train: {y_train.shape}")
 st.write(f"Shape of X_valid: {X_valid.shape}")
 st.write(f"Shape of y_valid: {y_valid.shape}")
 
-# Check if the validation set is sufficient
-if X_valid.shape[0] == 0:
-    st.error("Error: Validation set is too small to create sequences.")
-    st.stop()
-
-# Ensure correct reshaping
-if len(X_valid.shape) == 2:
-    try:
-        X_valid = np.reshape(X_valid, (X_valid.shape[0], X_valid.shape[1], 1))
-    except IndexError as e:
-        st.error(f"IndexError during reshaping: {e}")
-        st.stop()
-else:
-    st.error("Error: X_valid does not have the expected number of dimensions.")
-    st.stop()
-
-# Reshape X_train for LSTM model
+# Reshape X_train and X_valid for LSTM model
 X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+X_valid = np.reshape(X_valid, (X_valid.shape[0], X_valid.shape[1], 1))
 
 # Build the LSTM model
 lstm_model = Sequential()
