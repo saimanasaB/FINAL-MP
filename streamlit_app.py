@@ -7,6 +7,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.callbacks import EarlyStopping
 
 # Load the dataset
 @st.cache_data
@@ -20,54 +21,54 @@ def add_css():
     st.markdown("""
     <style>
     body {
-        font-family: Arial, sans-serif;
-    }
-    .title {
-        text-align: center;
-        color: #2E8B57;
-        font-size: 36px;
-        font-weight: bold;
-        margin-top: 20px;
+        font-family: 'Arial', sans-serif;
+        color: #333;
     }
     .section-title {
-        color: #4682B4;
-        font-size: 28px;
-        margin-top: 20px;
-        border-bottom: 2px solid #4682B4;
-        padding-bottom: 10px;
+        font-size: 24px;
+        color: #007BFF;
+        font-weight: bold;
+        margin-bottom: 20px;
     }
     .metrics-title {
-        font-size: 24px;
+        font-size: 28px;
         color: #FFA500;
         font-weight: bold;
         text-align: center;
     }
     .metrics-box {
         padding: 10px;
-        background-color: #f9f9f9;
+        background-color: #f0f0f0;
         border-radius: 10px;
         box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
     }
-    .container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+    }
+    th {
+        background-color: #007BFF;
+        color: white;
     }
     </style>
     """, unsafe_allow_html=True)
 
 add_css()
 
-st.markdown('<div class="title">LSTM & SARIMA Forecasting of General Index</div>', unsafe_allow_html=True)
+st.title("LSTM & SARIMA Forecasting of General index")
 
 # Display dataset preview
-st.write('<div class="section-title">Preview of Dataset</div>', unsafe_allow_html=True)
+st.write("### Preview of Dataset")
 st.write(data.head())
 
 # Display columns in the dataset
-st.write('<div class="section-title">Columns in the Dataset:</div>', unsafe_allow_html=True)
+st.write("### Columns in the Dataset:")
 st.write(data.columns.tolist())
 
 # Check if 'General index' column exists
@@ -81,11 +82,11 @@ data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), fr
 data.set_index('Generated Date', inplace=True)
 
 # Plot historical data using Altair
-st.write('<div class="section-title">Historical Data for General Index</div>', unsafe_allow_html=True)
+st.write("### Historical Data for General index")
 historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
     x='Generated Date:T', y='General index:Q'
 ).properties(
-    width=700, height=400, title="Historical General Index Data"
+    width=700, height=400, title="Historical General index Data"
 )
 st.altair_chart(historical_chart)
 
@@ -96,6 +97,7 @@ test_data = data['2024-01-01':]
 # Normalize the General index for LSTM
 scaler = MinMaxScaler()
 train_scaled = scaler.fit_transform(train_data[['General index']])
+test_scaled = scaler.transform(test_data[['General index']])
 
 # Prepare data for LSTM model
 def create_sequences(data, seq_length):
@@ -107,25 +109,40 @@ def create_sequences(data, seq_length):
         ys.append(y)
     return np.array(xs), np.array(ys)
 
-seq_length = 12  # Using 12 months (1 year) for sequence length
-X_train, y_train = create_sequences(train_scaled, seq_length)
+def add_lag_features(df, lag=12):
+    for i in range(1, lag+1):
+        df[f'lag_{i}'] = df['General index'].shift(i)
+    df = df.dropna()
+    return df
 
-# Reshape X_train for LSTM model
+# Adding lag features
+data_with_lags = add_lag_features(data.copy())
+
+# Update sequence length
+seq_length = 12
+X_train, y_train = create_sequences(train_scaled, seq_length)
 X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
 
-# Build the LSTM model
-lstm_model = Sequential()
-lstm_model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
-lstm_model.add(Dropout(0.2))
-lstm_model.add(LSTM(units=50))
-lstm_model.add(Dropout(0.2))
-lstm_model.add(Dense(1))
-lstm_model.compile(optimizer='adam', loss='mean_squared_error')
+# Build the LSTM model with dropout and early stopping
+def build_lstm_model(seq_length):
+    model = Sequential()
+    model.add(LSTM(units=100, return_sequences=True, input_shape=(seq_length, 1)))
+    model.add(Dropout(0.2))
+    model.add(LSTM(units=100))
+    model.add(Dropout(0.2))
+    model.add(Dense(1))
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    return model
 
-# Train the LSTM model
-lstm_model.fit(X_train, y_train, epochs=50, batch_size=32)
+lstm_model = build_lstm_model(seq_length)
 
-# Predict future 10 years using LSTM
+# Set up early stopping
+early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+
+# Train the LSTM model with validation split
+history = lstm_model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.1, callbacks=[early_stopping], verbose=1)
+
+# Predict future values using the trained LSTM model
 future_steps = 10 * 12  # Predicting 10 years (120 months)
 last_sequence = train_scaled[-seq_length:]
 predictions_lstm = []
@@ -191,76 +208,48 @@ wape_sarima = weighted_absolute_percentage_error(y_true_sarima, y_pred_sarima)
 mdape_sarima = median_absolute_percentage_error(y_true_sarima, y_pred_sarima)
 
 # Plot the LSTM and SARIMA future predictions
-st.write('<div class="section-title">Future Predictions (LSTM and SARIMA)</div>', unsafe_allow_html=True)
 lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
-    x='index:T', y='LSTM Prediction:Q'
-).properties(width=700, height=400, title="LSTM Forecast")
+    x='Generated Date:T', y='LSTM Prediction:Q'
+).properties(
+    width=700, height=400, title="LSTM Future Predictions"
+)
 
 sarima_chart = alt.Chart(sarima_forecast_df.reset_index()).mark_line(color='green').encode(
-    x='index:T', y='SARIMA Prediction:Q'
-).properties(width=700, height=400,     title="SARIMA Forecast"
-)
-
-combined_chart = lstm_chart + sarima_chart
-st.altair_chart(combined_chart)
-
-# Display prediction data
-st.write('<div class="section-title">LSTM Predictions for Next 10 Years</div>', unsafe_allow_html=True)
-st.write(lstm_forecast)
-
-st.write('<div class="section-title">SARIMA Predictions for Next 3 Years</div>', unsafe_allow_html=True)
-st.write(sarima_forecast_df[['SARIMA Prediction']])
-
-# Plot evaluation metrics using Altair
-st.write('<div class="section-title">Model Evaluation Metrics</div>', unsafe_allow_html=True)
-
-metrics_df = pd.DataFrame({
-    "Metric": ["MAE", "MSE", "RMSE", "MAPE", "SMAPE", "WAPE", "MDAPE"],
-    "LSTM": [mae_lstm, mse_lstm, rmse_lstm, mape_lstm, smape_lstm, wape_lstm, mdape_lstm],
-    "SARIMA": [mae_sarima, mse_sarima, rmse_sarima, mape_sarima, smape_sarima, wape_sarima, mdape_sarima]
-})
-
-metrics_melted = metrics_df.melt(id_vars="Metric", var_name="Model", value_name="Value")
-
-metrics_chart = alt.Chart(metrics_melted).mark_bar().encode(
-    x=alt.X('Metric:N', title='Metric'),
-    y=alt.Y('Value:Q', title='Value'),
-    color='Model:N',
-    tooltip=['Metric', 'Model', 'Value']
+    x='Generated Date:T', y='SARIMA Prediction:Q'
 ).properties(
-    width=700,
-    height=400,
-    title="Comparison of Model Metrics (LSTM vs SARIMA)"
+    width=700, height=400, title="SARIMA Future Predictions"
 )
 
+st.write("### Future Predictions Comparison")
+st.altair_chart(lstm_chart)
+st.altair_chart(sarima_chart)
+
+# Display Evaluation Metrics
+st.write("### Evaluation Metrics")
+metrics_df = pd.DataFrame({
+    'Metric': ['MAE', 'MSE', 'RMSE', 'MAPE', 'SMAPE', 'WAPE', 'MDAPE'],
+    'LSTM': [mae_lstm, mse_lstm, rmse_lstm, mape_lstm, smape_lstm, wape_lstm, mdape_lstm],
+    'SARIMA': [mae_sarima, mse_sarima, rmse_sarima, mape_sarima, smape_sarima, wape_sarima, mdape_sarima]
+})
+st.write(metrics_df)
+
+# Display the metrics plot
+metrics_chart = alt.Chart(metrics_df).mark_bar().encode(
+    x='Metric:N',
+    y='LSTM:Q',
+    color=alt.value('blue'),
+    tooltip=['Metric:N', 'LSTM:Q']
+).properties(title='LSTM Evaluation Metrics')
+
+metrics_chart_sarima = alt.Chart(metrics_df).mark_bar().encode(
+    x='Metric:N',
+    y='SARIMA:Q',
+    color=alt.value('green'),
+    tooltip=['Metric:N', 'SARIMA:Q']
+).properties(title='SARIMA Evaluation Metrics')
+
+st.write("#### LSTM Evaluation Metrics")
 st.altair_chart(metrics_chart)
 
-# Display metrics in tabular format
-st.write('<div class="metrics-title">Detailed Metrics Comparison</div>', unsafe_allow_html=True)
-
-st.write("#### LSTM Model Metrics")
-st.markdown(f"""
-<div class="metrics-box">
-<b>MAE:</b> {mae_lstm:.2f} <br/>
-<b>MSE:</b> {mse_lstm:.2f} <br/>
-<b>RMSE:</b> {rmse_lstm:.2f} <br/>
-<b>MAPE:</b> {mape_lstm:.2f}% <br/>
-<b>SMAPE:</b> {smape_lstm:.2f}% <br/>
-<b>WAPE:</b> {wape_lstm:.2f}% <br/>
-<b>MDAPE:</b> {mdape_lstm:.2f}% <br/>
-</div>
-""", unsafe_allow_html=True)
-
-st.write("#### SARIMA Model Metrics")
-st.markdown(f"""
-<div class="metrics-box">
-<b>MAE:</b> {mae_sarima:.2f} <br/>
-<b>MSE:</b> {mse_sarima:.2f} <br/>
-<b>RMSE:</b> {rmse_sarima:.2f} <br/>
-<b>MAPE:</b> {mape_sarima:.2f}% <br/>
-<b>SMAPE:</b> {smape_sarima:.2f}% <br/>
-<b>WAPE:</b> {wape_sarima:.2f}% <br/>
-<b>MDAPE:</b> {mdape_sarima:.2f}% <br/>
-</div>
-""", unsafe_allow_html=True)
-
+st.write("#### SARIMA Evaluation Metrics")
+st.altair_chart(metrics_chart_sarima)
