@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import altair as alt
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.statespace.sarimax import SARIMAX
-import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 
@@ -15,6 +16,27 @@ def load_data():
     return pd.read_csv('cleaned_data.csv')
 
 data = load_data()
+
+# Apply custom CSS
+def add_css():
+    st.markdown("""
+    <style>
+    .metrics-title {
+        font-size: 28px;
+        color: #FFA500;
+        font-weight: bold;
+        text-align: center;
+    }
+    .metrics-box {
+        padding: 10px;
+        background-color: #f0f0f0;
+        border-radius: 10px;
+        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+add_css()
 
 st.title("LSTM & SARIMA Forecasting of General index")
 
@@ -164,23 +186,46 @@ st.write(lstm_forecast)
 st.write("### SARIMA Predictions for Next 3 Years")
 st.write(sarima_forecast_df[['SARIMA Prediction']])
 
-# Metrics Display
-st.write("### Model Performance Metrics")
+# Plot evaluation metrics
+st.write("### Model Evaluation Metrics")
 
+metrics = pd.DataFrame({
+    "Metric": ["MAE", "MSE", "RMSE", "MAPE", "SMAPE", "WAPE", "MDAPE"],
+    "LSTM": [mae_lstm, mse_lstm, rmse_lstm, mape_lstm, smape_lstm, wape_lstm, mdape_lstm],
+    "SARIMA": [mae_sarima, mse_sarima, rmse_sarima, mape_sarima, smape_sarima, wape_sarima, mdape_sarima]
+})
+
+fig, ax = plt.subplots(figsize=(10, 6))
+sns.barplot(x="Metric", y="LSTM", data=metrics, color="blue", label="LSTM", alpha=0.6)
+sns.barplot(x="Metric", y="SARIMA", data=metrics, color="green", label="SARIMA", alpha=0.6)
+plt.title("Comparison of Model Metrics (LSTM vs SARIMA)")
+plt.legend()
+st.pyplot(fig)
+
+# Styled metrics display
+st.write('<div class="metrics-title">Detailed Metrics Comparison</div>', unsafe_allow_html=True)
 st.write("#### LSTM Model Metrics")
-st.write(f"MAE: {mae_lstm:.2f}")
-st.write(f"MSE: {mse_lstm:.2f}")
-st.write(f"RMSE: {rmse_lstm:.2f}")
-st.write(f"MAPE: {mape_lstm:.2f}%")
-st.write(f"SMAPE: {smape_lstm:.2f}%")
-st.write(f"WAPE: {wape_lstm:.2f}%")
-st.write(f"MDAPE: {mdape_lstm:.2f}%")
+st.markdown(f"""
+<div class="metrics-box">
+<b>MAE:</b> {mae_lstm:.2f} <br/>
+<b>MSE:</b> {mse_lstm:.2f} <br/>
+<b>RMSE:</b> {rmse_lstm:.2f} <br/>
+<b>MAPE:</b> {mape_lstm:.2f}% <br/>
+<b>SMAPE:</b> {smape_lstm:.2f}% <br/>
+<b>WAPE:</b> {wape_lstm:.2f}% <br/>
+<b>MDAPE:</b> {mdape_lstm:.2f}% <br/>
+</div>
+""", unsafe_allow_html=True)
 
 st.write("#### SARIMA Model Metrics")
-st.write(f"MAE: {mae_sarima:.2f}")
-st.write(f"MSE: {mse_sarima:.2f}")
-st.write(f"RMSE: {rmse_sarima:.2f}")
-st.write(f"MAPE: {mape_sarima:.2f}%")
-st.write(f"SMAPE: {smape_sarima:.2f}%")
-st.write(f"WAPE: {wape_sarima:.2f}%")
-st.write(f"MDAPE: {mdape_sarima:.2f}%")
+st.markdown(f"""
+<div class="metrics-box">
+<b>MAE:</b> {mae_sarima:.2f} <br/>
+<b>MSE:</b> {mse_sarima:.2f} <br/>
+<b>RMSE:</b> {rmse_sarima:.2f} <br/>
+<b>MAPE:</b> {mape_sarima:.2f}% <br/>
+<b>SMAPE:</b> {smape_sarima:.2f}% <br/>
+<b>WAPE:</b> {wape_sarima:.2f}% <br/>
+<b>MDAPE:</b> {mdape_sarima:.2f}% <br/>
+</div>
+""", unsafe_allow_html=True)
