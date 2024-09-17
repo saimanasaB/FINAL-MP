@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import altair as alt
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
@@ -25,16 +26,13 @@ st.write(data.head())
 st.write("### Columns in the Dataset:")
 st.write(data.columns.tolist())
 
-# Skip 'Date' column check since it's not in the dataset
-# Assume we have a column for 'General index' or similar data
+# Check if 'General index' column exists
 if 'General index' not in data.columns:
     st.error("Error: 'General index' column not found in the dataset.")
     st.stop()
 
-# If there are no dates, generate a simple index for plotting purposes
-# Assume monthly frequency and starting from an arbitrary date, like '2020-01-01'
+# Generate a time index
 st.write("Since no 'Date' column is provided, generating a time index assuming monthly intervals.")
-
 data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), freq='MS')
 data.set_index('Generated Date', inplace=True)
 
@@ -109,6 +107,43 @@ sarima_forecast_df = sarima_forecast.conf_int(alpha=0.05)
 sarima_forecast_df['SARIMA Prediction'] = sarima_forecast.predicted_mean
 sarima_forecast_df.index = pd.date_range(start='2024-03-01', periods=future_steps_sarima, freq='MS')
 
+# Metrics Calculation
+def mean_absolute_percentage_error(y_true, y_pred):
+    return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
+def symmetric_mean_absolute_percentage_error(y_true, y_pred):
+    return np.mean(np.abs(y_true - y_pred) / (np.abs(y_true) + np.abs(y_pred))) * 100
+
+def weighted_absolute_percentage_error(y_true, y_pred):
+    return np.sum(np.abs(y_true - y_pred)) / np.sum(np.abs(y_true)) * 100
+
+def median_absolute_percentage_error(y_true, y_pred):
+    return np.median(np.abs((y_true - y_pred) / y_true)) * 100
+
+# Evaluate LSTM model
+y_true_lstm = test_data['General index'][:future_steps].values
+y_pred_lstm = lstm_forecast['LSTM Prediction'].values
+
+mae_lstm = mean_absolute_error(y_true_lstm, y_pred_lstm)
+mse_lstm = mean_squared_error(y_true_lstm, y_pred_lstm)
+rmse_lstm = np.sqrt(mse_lstm)
+mape_lstm = mean_absolute_percentage_error(y_true_lstm, y_pred_lstm)
+smape_lstm = symmetric_mean_absolute_percentage_error(y_true_lstm, y_pred_lstm)
+wape_lstm = weighted_absolute_percentage_error(y_true_lstm, y_pred_lstm)
+mdape_lstm = median_absolute_percentage_error(y_true_lstm, y_pred_lstm)
+
+# Evaluate SARIMA model
+y_true_sarima = test_data['General index'][:future_steps_sarima].values
+y_pred_sarima = sarima_forecast_df['SARIMA Prediction'].values
+
+mae_sarima = mean_absolute_error(y_true_sarima, y_pred_sarima)
+mse_sarima = mean_squared_error(y_true_sarima, y_pred_sarima)
+rmse_sarima = np.sqrt(mse_sarima)
+mape_sarima = mean_absolute_percentage_error(y_true_sarima, y_pred_sarima)
+smape_sarima = symmetric_mean_absolute_percentage_error(y_true_sarima, y_pred_sarima)
+wape_sarima = weighted_absolute_percentage_error(y_true_sarima, y_pred_sarima)
+mdape_sarima = median_absolute_percentage_error(y_true_sarima, y_pred_sarima)
+
 # Plot the LSTM and SARIMA future predictions
 st.write("### Future Predictions (LSTM and SARIMA)")
 lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
@@ -129,49 +164,23 @@ st.write(lstm_forecast)
 st.write("### SARIMA Predictions for Next 3 Years")
 st.write(sarima_forecast_df[['SARIMA Prediction']])
 
-# LSTM Chart with tooltips
-lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
-    x=alt.X('index:T', title='Date'),
-    y=alt.Y('LSTM Prediction:Q', title='General index'),
-    tooltip=['index:T', 'LSTM Prediction:Q']
-).properties(width=700, height=400)
+# Metrics Display
+st.write("### Model Performance Metrics")
 
-# SARIMA Chart with tooltips
-sarima_chart = alt.Chart(sarima_forecast_df.reset_index()).mark_line(color='green').encode(
-    x=alt.X('index:T', title='Date'),
-    y=alt.Y('SARIMA Prediction:Q', title='General index'),
-    tooltip=['index:T', 'SARIMA Prediction:Q']
-).properties(width=700, height=400)
+st.write("#### LSTM Model Metrics")
+st.write(f"MAE: {mae_lstm:.2f}")
+st.write(f"MSE: {mse_lstm:.2f}")
+st.write(f"RMSE: {rmse_lstm:.2f}")
+st.write(f"MAPE: {mape_lstm:.2f}%")
+st.write(f"SMAPE: {smape_lstm:.2f}%")
+st.write(f"WAPE: {wape_lstm:.2f}%")
+st.write(f"MDAPE: {mdape_lstm:.2f}%")
 
-combined_chart = lstm_chart + sarima_chart
-st.altair_chart(combined_chart)
-
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-import numpy as np
-
-# Function to calculate evaluation metrics
-def calculate_metrics(actual, predicted):
-    mae = mean_absolute_error(actual, predicted)
-    mse = mean_squared_error(actual, predicted)
-    rmse = np.sqrt(mse)
-    mape = np.mean(np.abs((actual - predicted) / actual)) * 100
-    smape = 100 * np.mean(2 * np.abs(actual - predicted) / (np.abs(actual) + np.abs(predicted)))
-    return mae, mse, rmse, mape, smape
-
-# Example usage for LSTM
-st.write("### LSTM Model Evaluation")
-mae, mse, rmse, mape, smape = calculate_metrics(test_data['General index'], lstm_forecast['LSTM Prediction'][:len(test_data)])
-st.write(f"MAE: {mae}")
-st.write(f"MSE: {mse}")
-st.write(f"RMSE: {rmse}")
-st.write(f"MAPE: {mape}%")
-st.write(f"SMAPE: {smape}%")
-
-# Example usage for SARIMA
-st.write("### SARIMA Model Evaluation")
-mae_sarima, mse_sarima, rmse_sarima, mape_sarima, smape_sarima = calculate_metrics(test_data['General index'], sarima_forecast_df['SARIMA Prediction'][:len(test_data)])
-st.write(f"MAE: {mae_sarima}")
-st.write(f"MSE: {mse_sarima}")
-st.write(f"RMSE: {rmse_sarima}")
-st.write(f"MAPE: {mape_sarima}%")
-st.write(f"SMAPE: {smape_sarima}%")
+st.write("#### SARIMA Model Metrics")
+st.write(f"MAE: {mae_sarima:.2f}")
+st.write(f"MSE: {mse_sarima:.2f}")
+st.write(f"RMSE: {rmse_sarima:.2f}")
+st.write(f"MAPE: {mape_sarima:.2f}%")
+st.write(f"SMAPE: {smape_sarima:.2f}%")
+st.write(f"WAPE: {wape_sarima:.2f}%")
+st.write(f"MDAPE: {mdape_sarima:.2f}%")
