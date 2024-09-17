@@ -128,3 +128,21 @@ st.write(lstm_forecast)
 
 st.write("### SARIMA Predictions for Next 3 Years")
 st.write(sarima_forecast_df[['SARIMA Prediction']])
+
+# LSTM Chart with tooltips
+lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
+    x=alt.X('index:T', title='Date'),
+    y=alt.Y('LSTM Prediction:Q', title='General index'),
+    tooltip=['index:T', 'LSTM Prediction:Q']
+).properties(width=700, height=400)
+
+# SARIMA Chart with tooltips
+sarima_chart = alt.Chart(sarima_forecast_df.reset_index()).mark_line(color='green').encode(
+    x=alt.X('index:T', title='Date'),
+    y=alt.Y('SARIMA Prediction:Q', title='General index'),
+    tooltip=['index:T', 'SARIMA Prediction:Q']
+).properties(width=700, height=400)
+
+combined_chart = lstm_chart + sarima_chart
+st.altair_chart(combined_chart)
+
