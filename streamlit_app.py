@@ -198,4 +198,69 @@ lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').enco
 
 sarima_chart = alt.Chart(sarima_forecast_df.reset_index()).mark_line(color='green').encode(
     x='index:T', y='SARIMA Prediction:Q'
-).properties(width=700, height=400,
+).properties(width=700, height=400,     title="SARIMA Forecast"
+)
+
+combined_chart = lstm_chart + sarima_chart
+st.altair_chart(combined_chart)
+
+# Display prediction data
+st.write('<div class="section-title">LSTM Predictions for Next 10 Years</div>', unsafe_allow_html=True)
+st.write(lstm_forecast)
+
+st.write('<div class="section-title">SARIMA Predictions for Next 3 Years</div>', unsafe_allow_html=True)
+st.write(sarima_forecast_df[['SARIMA Prediction']])
+
+# Plot evaluation metrics using Altair
+st.write('<div class="section-title">Model Evaluation Metrics</div>', unsafe_allow_html=True)
+
+metrics_df = pd.DataFrame({
+    "Metric": ["MAE", "MSE", "RMSE", "MAPE", "SMAPE", "WAPE", "MDAPE"],
+    "LSTM": [mae_lstm, mse_lstm, rmse_lstm, mape_lstm, smape_lstm, wape_lstm, mdape_lstm],
+    "SARIMA": [mae_sarima, mse_sarima, rmse_sarima, mape_sarima, smape_sarima, wape_sarima, mdape_sarima]
+})
+
+metrics_melted = metrics_df.melt(id_vars="Metric", var_name="Model", value_name="Value")
+
+metrics_chart = alt.Chart(metrics_melted).mark_bar().encode(
+    x=alt.X('Metric:N', title='Metric'),
+    y=alt.Y('Value:Q', title='Value'),
+    color='Model:N',
+    tooltip=['Metric', 'Model', 'Value']
+).properties(
+    width=700,
+    height=400,
+    title="Comparison of Model Metrics (LSTM vs SARIMA)"
+)
+
+st.altair_chart(metrics_chart)
+
+# Display metrics in tabular format
+st.write('<div class="metrics-title">Detailed Metrics Comparison</div>', unsafe_allow_html=True)
+
+st.write("#### LSTM Model Metrics")
+st.markdown(f"""
+<div class="metrics-box">
+<b>MAE:</b> {mae_lstm:.2f} <br/>
+<b>MSE:</b> {mse_lstm:.2f} <br/>
+<b>RMSE:</b> {rmse_lstm:.2f} <br/>
+<b>MAPE:</b> {mape_lstm:.2f}% <br/>
+<b>SMAPE:</b> {smape_lstm:.2f}% <br/>
+<b>WAPE:</b> {wape_lstm:.2f}% <br/>
+<b>MDAPE:</b> {mdape_lstm:.2f}% <br/>
+</div>
+""", unsafe_allow_html=True)
+
+st.write("#### SARIMA Model Metrics")
+st.markdown(f"""
+<div class="metrics-box">
+<b>MAE:</b> {mae_sarima:.2f} <br/>
+<b>MSE:</b> {mse_sarima:.2f} <br/>
+<b>RMSE:</b> {rmse_sarima:.2f} <br/>
+<b>MAPE:</b> {mape_sarima:.2f}% <br/>
+<b>SMAPE:</b> {smape_sarima:.2f}% <br/>
+<b>WAPE:</b> {wape_sarima:.2f}% <br/>
+<b>MDAPE:</b> {mdape_sarima:.2f}% <br/>
+</div>
+""", unsafe_allow_html=True)
+
