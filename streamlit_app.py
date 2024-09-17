@@ -17,27 +17,6 @@ data = load_data()
 
 st.title("LSTM & SARIMA Forecasting of General index")
 
-# Sidebar for user inputs
-st.sidebar.header("Model Configuration")
-
-# LSTM sequence length input
-seq_length = st.sidebar.slider("LSTM Sequence Length (months)", min_value=6, max_value=24, value=12, step=1)
-
-# SARIMA order inputs
-p = st.sidebar.number_input("SARIMA p (AR order)", min_value=0, max_value=5, value=1, step=1)
-d = st.sidebar.number_input("SARIMA d (difference order)", min_value=0, max_value=2, value=1, step=1)
-q = st.sidebar.number_input("SARIMA q (MA order)", min_value=0, max_value=5, value=1, step=1)
-
-# SARIMA seasonal order inputs
-P = st.sidebar.number_input("SARIMA P (Seasonal AR order)", min_value=0, max_value=5, value=1, step=1)
-D = st.sidebar.number_input("SARIMA D (Seasonal difference order)", min_value=0, max_value=2, value=1, step=1)
-Q = st.sidebar.number_input("SARIMA Q (Seasonal MA order)", min_value=0, max_value=5, value=1, step=1)
-m = st.sidebar.number_input("SARIMA Seasonal period (m)", min_value=1, max_value=12, value=12, step=1)
-
-# Number of years for prediction input
-num_years_lstm = st.sidebar.slider("LSTM Prediction Horizon (years)", min_value=1, max_value=10, value=10, step=1)
-num_years_sarima = st.sidebar.slider("SARIMA Prediction Horizon (years)", min_value=1, max_value=10, value=3, step=1)
-
 # Display dataset preview
 st.write("### Preview of Dataset")
 st.write(data.head())
@@ -46,11 +25,14 @@ st.write(data.head())
 st.write("### Columns in the Dataset:")
 st.write(data.columns.tolist())
 
+# Skip 'Date' column check since it's not in the dataset
+# Assume we have a column for 'General index' or similar data
 if 'General index' not in data.columns:
     st.error("Error: 'General index' column not found in the dataset.")
     st.stop()
 
-# Generate a time index if no Date column is present
+# If there are no dates, generate a simple index for plotting purposes
+# Assume monthly frequency and starting from an arbitrary date, like '2020-01-01'
 st.write("Since no 'Date' column is provided, generating a time index assuming monthly intervals.")
 
 data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), freq='MS')
@@ -83,7 +65,7 @@ def create_sequences(data, seq_length):
         ys.append(y)
     return np.array(xs), np.array(ys)
 
-# Create sequences based on user-configured sequence length
+seq_length = 12  # Using 12 months (1 year) for sequence length
 X_train, y_train = create_sequences(train_scaled, seq_length)
 
 # Reshape X_train for LSTM model
@@ -99,12 +81,12 @@ lstm_model.compile(optimizer='adam', loss='mean_squared_error')
 # Train the LSTM model
 lstm_model.fit(X_train, y_train, epochs=20, batch_size=32)
 
-# Predict future years using LSTM
-future_steps_lstm = num_years_lstm * 12  # Convert years to months
+# Predict future 10 years using LSTM
+future_steps = 10 * 12  # Predicting 10 years (120 months)
 last_sequence = train_scaled[-seq_length:]
 predictions_lstm = []
 
-for _ in range(future_steps_lstm):
+for _ in range(future_steps):
     pred = lstm_model.predict(np.reshape(last_sequence, (1, seq_length, 1)))
     predictions_lstm.append(pred[0, 0])
     last_sequence = np.append(last_sequence[1:], pred[0, 0]).reshape(seq_length, 1)
@@ -113,15 +95,15 @@ for _ in range(future_steps_lstm):
 predictions_lstm = scaler.inverse_transform(np.array(predictions_lstm).reshape(-1, 1))
 
 # Create a DataFrame for LSTM future predictions
-future_dates_lstm = pd.date_range(start='2024-03-01', periods=future_steps_lstm, freq='MS')
+future_dates_lstm = pd.date_range(start='2024-03-01', periods=future_steps, freq='MS')
 lstm_forecast = pd.DataFrame(predictions_lstm, index=future_dates_lstm, columns=['LSTM Prediction'])
 
-# Build the SARIMA model with user inputs
-sarima_model = SARIMAX(train_data['General index'], order=(p, d, q), seasonal_order=(P, D, Q, m))
+# Build the SARIMA model
+sarima_model = SARIMAX(train_data['General index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
 sarima_fit = sarima_model.fit(disp=False)
 
-# Predict future years using SARIMA
-future_steps_sarima = num_years_sarima * 12  # Convert years to months
+# Predict future 3 years using SARIMA
+future_steps_sarima = 3 * 12  # 3 years (36 months)
 sarima_forecast = sarima_fit.get_forecast(steps=future_steps_sarima)
 sarima_forecast_df = sarima_forecast.conf_int(alpha=0.05)
 sarima_forecast_df['SARIMA Prediction'] = sarima_forecast.predicted_mean
@@ -141,8 +123,25 @@ combined_chart = lstm_chart + sarima_chart
 st.altair_chart(combined_chart)
 
 # Display prediction data
-st.write(f"### LSTM Predictions for Next {num_years_lstm} Years")
+st.write("### LSTM Predictions for Next 10 Years")
 st.write(lstm_forecast)
 
-st.write(f"### SARIMA Predictions for Next {num_years_sarima} Years")
+st.write("### SARIMA Predictions for Next 3 Years")
 st.write(sarima_forecast_df[['SARIMA Prediction']])
+
+# LSTM Chart with tooltips
+lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
+    x=alt.X('index:T', title='Date'),
+    y=alt.Y('LSTM Prediction:Q', title='General index'),
+    tooltip=['index:T', 'LSTM Prediction:Q']
+).properties(width=700, height=400)
+
+# SARIMA Chart with tooltips
+sarima_chart = alt.Chart(sarima_forecast_df.reset_index()).mark_line(color='green').encode(
+    x=alt.X('index:T', title='Date'),
+    y=alt.Y('SARIMA Prediction:Q', title='General index'),
+    tooltip=['index:T', 'SARIMA Prediction:Q']
+).properties(width=700, height=400)
+
+combined_chart = lstm_chart + sarima_chart
+st.altair_chart(combined_chart)
