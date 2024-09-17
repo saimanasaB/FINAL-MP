@@ -5,8 +5,51 @@ import altair as alt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
+
+# Custom CSS to enhance the UI
+st.markdown("""
+    <style>
+    body {
+        background-color: #f0f2f6;
+        font-family: 'Segoe UI', sans-serif;
+    }
+    .main-title {
+        font-size: 3rem;
+        color: #4A90E2;
+        text-align: center;
+        font-weight: bold;
+        margin-bottom: 20px;
+    }
+    .sub-title {
+        font-size: 1.5rem;
+        color: #4A90E2;
+        margin-top: 30px;
+        margin-bottom: 10px;
+        font-weight: bold;
+    }
+    .metrics-title {
+        color: #ff4b4b;
+        font-size: 1.2rem;
+        font-weight: bold;
+    }
+    .metrics-box {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        margin-bottom: 10px;
+    }
+    .chart-title {
+        color: #2C3E50;
+        font-size: 1.5rem;
+        text-align: center;
+        margin-top: 20px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # Load the dataset
 @st.cache_data
@@ -15,35 +58,14 @@ def load_data():
 
 data = load_data()
 
-# Apply custom CSS
-def add_css():
-    st.markdown("""
-    <style>
-    .metrics-title {
-        font-size: 28px;
-        color: #FFA500;
-        font-weight: bold;
-        text-align: center;
-    }
-    .metrics-box {
-        padding: 10px;
-        background-color: #f0f0f0;
-        border-radius: 10px;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-add_css()
-
-st.title("LSTM & SARIMA Forecasting of General index")
+st.markdown('<div class="main-title">LSTM & SARIMA Forecasting of General Index</div>', unsafe_allow_html=True)
 
 # Display dataset preview
-st.write("### Preview of Dataset")
+st.markdown('<div class="sub-title">Preview of Dataset</div>', unsafe_allow_html=True)
 st.write(data.head())
 
 # Display columns in the dataset
-st.write("### Columns in the Dataset:")
+st.markdown('<div class="sub-title">Columns in the Dataset:</div>', unsafe_allow_html=True)
 st.write(data.columns.tolist())
 
 # Check if 'General index' column exists
@@ -57,11 +79,11 @@ data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), fr
 data.set_index('Generated Date', inplace=True)
 
 # Plot historical data using Altair
-st.write("### Historical Data for General index")
-historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
+st.markdown('<div class="chart-title">Historical Data for General Index</div>', unsafe_allow_html=True)
+historical_chart = alt.Chart(data.reset_index()).mark_line(color='#FF5733').encode(
     x='Generated Date:T', y='General index:Q'
 ).properties(
-    width=700, height=400, title="Historical General index Data"
+    width=700, height=400
 )
 st.altair_chart(historical_chart)
 
@@ -165,7 +187,7 @@ wape_sarima = weighted_absolute_percentage_error(y_true_sarima, y_pred_sarima)
 mdape_sarima = median_absolute_percentage_error(y_true_sarima, y_pred_sarima)
 
 # Plot the LSTM and SARIMA future predictions
-st.write("### Future Predictions (LSTM and SARIMA)")
+st.markdown('<div class="chart-title">Future Predictions (LSTM and SARIMA)</div>', unsafe_allow_html=True)
 lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
     x='index:T', y='LSTM Prediction:Q'
 ).properties(width=700, height=400)
@@ -178,60 +200,31 @@ combined_chart = lstm_chart + sarima_chart
 st.altair_chart(combined_chart)
 
 # Display prediction data
-st.write("### LSTM Predictions for Next 10 Years")
+st.markdown('<div class="sub-title">LSTM Predictions for Next 10 Years</div>', unsafe_allow_html=True)
 st.write(lstm_forecast)
 
-st.write("### SARIMA Predictions for Next 3 Years")
+st.markdown('<div class="sub-title">SARIMA Predictions for Next 3 Years</div>', unsafe_allow_html=True)
 st.write(sarima_forecast_df[['SARIMA Prediction']])
 
-# Plot evaluation metrics using Altair
-st.write("### Model Evaluation Metrics")
+# Metrics Display
+st.markdown('<div class="metrics-title">Model Performance Metrics</div>', unsafe_allow_html=True)
 
-metrics_df = pd.DataFrame({
-    "Metric": ["MAE", "MSE", "RMSE", "MAPE", "SMAPE", "WAPE", "MDAPE"],
-    "LSTM": [mae_lstm, mse_lstm, rmse_lstm, mape_lstm, smape_lstm, wape_lstm, mdape_lstm],
-    "SARIMA": [mae_sarima, mse_sarima, rmse_sarima, mape_sarima, smape_sarima, wape_sarima, mdape_sarima]
-})
+st.markdown('<div class="metrics-box"><div class="metrics-title">LSTM Model Metrics</div>', unsafe_allow_html=True)
+st.write(f"MAE: {mae_lstm:.2f}")
+st.write(f"MSE: {mse_lstm:.2f}")
+st.write(f"RMSE: {rmse_lstm:.2f}")
+st.write(f"MAPE: {mape_lstm:.2f}%")
+st.write(f"SMAPE: {smape_lstm:.2f}%")
+st.write(f"WAPE: {wape_lstm:.2f}%")
+st.write(f"MDAPE: {mdape_lstm:.2f}%")
+st.markdown('</div>', unsafe_allow_html=True)
 
-metrics_melted = metrics_df.melt(id_vars="Metric", var_name="Model", value_name="Value")
-
-metrics_chart = alt.Chart(metrics_melted).mark_bar().encode(
-    x=alt.X('Metric:N', title='Metric'),
-    y=alt.Y('Value:Q', title='Value'),
-    color='Model:N',
-    tooltip=['Metric', 'Model', 'Value']
-).properties(
-    width=700,
-    height=400,
-    title="Comparison of Model Metrics (LSTM vs SARIMA)"
-)
-
-st.altair_chart(metrics_chart)
-
-# Styled metrics display
-st.write('<div class="metrics-title">Detailed Metrics Comparison</div>', unsafe_allow_html=True)
-st.write("#### LSTM Model Metrics")
-st.markdown(f"""
-<div class="metrics-box">
-<b>MAE:</b> {mae_lstm:.2f} <br/>
-<b>MSE:</b> {mse_lstm:.2f} <br/>
-<b>RMSE:</b> {rmse_lstm:.2f} <br/>
-<b>MAPE:</b> {mape_lstm:.2f}% <br/>
-<b>SMAPE:</b> {smape_lstm:.2f}% <br/>
-<b>WAPE:</b> {wape_lstm:.2f}% <br/>
-<b>MDAPE:</b> {mdape_lstm:.2f}% <br/>
-</div>
-""", unsafe_allow_html=True)
-
-st.write("#### SARIMA Model Metrics")
-st.markdown(f"""
-<div class="metrics-box">
-<b>MAE:</b> {mae_sarima:.2f} <br/>
-<b>MSE:</b> {mse_sarima:.2f} <br/>
-<b>RMSE:</b> {rmse_sarima:.2f} <br/>
-<b>MAPE:</b> {mape_sarima:.2f}% <br/>
-<b>SMAPE:</b> {smape_sarima:.2f}% <br/>
-<b>WAPE:</b> {wape_sarima:.2f}% <br/>
-<b>MDAPE:</b> {mdape_sarima:.2f}% <br/>
-</div>
-""", unsafe_allow_html=True)
+st.markdown('<div class="metrics-box"><div class="metrics-title">SARIMA Model Metrics</div>', unsafe_allow_html=True)
+st.write(f"MAE: {mae_sarima:.2f}")
+st.write(f"MSE: {mse_sarima:.2f}")
+st.write(f"RMSE: {rmse_sarima:.2f}")
+st.write(f"MAPE: {mape_sarima:.2f}%")
+st.write(f"SMAPE: {smape_sarima:.2f}%")
+st.write(f"WAPE: {wape_sarima:.2f}%")
+st.write(f"MDAPE: {mdape_sarima:.2f}%")
+st.markdown('</div>', unsafe_allow_html=True)
