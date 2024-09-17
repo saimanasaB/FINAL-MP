@@ -61,7 +61,7 @@ def add_css():
 
 add_css()
 
-st.title("LSTM & SARIMA Forecasting of General index")
+st.title("LSTM & SARIMA Forecasting of General Index")
 
 # Display dataset preview
 st.write("### Preview of Dataset")
@@ -82,11 +82,11 @@ data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), fr
 data.set_index('Generated Date', inplace=True)
 
 # Plot historical data using Altair
-st.write("### Historical Data for General index")
+st.write("### Historical Data for General Index")
 historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
     x='Generated Date:T', y='General index:Q'
 ).properties(
-    width=700, height=400, title="Historical General index Data"
+    width=700, height=400, title="Historical General Index Data"
 )
 st.altair_chart(historical_chart)
 
@@ -94,7 +94,7 @@ st.altair_chart(historical_chart)
 train_data = data[:'2023']
 test_data = data['2024-01-01':]
 
-# Normalize the General index for LSTM
+# Normalize the General Index for LSTM
 scaler = MinMaxScaler()
 train_scaled = scaler.fit_transform(train_data[['General index']])
 test_scaled = scaler.transform(test_data[['General index']])
@@ -122,6 +122,7 @@ data_with_lags = add_lag_features(data.copy())
 seq_length = 12
 X_train, y_train = create_sequences(train_scaled, seq_length)
 X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+y_train = np.reshape(y_train, (y_train.shape[0], 1))
 
 # Build the LSTM model with dropout and early stopping
 def build_lstm_model(seq_length):
@@ -140,7 +141,11 @@ lstm_model = build_lstm_model(seq_length)
 early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 
 # Train the LSTM model with validation split
-history = lstm_model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.1, callbacks=[early_stopping], verbose=1)
+try:
+    history = lstm_model.fit(X_train, y_train, epochs=50, batch_size=32, validation_split=0.1, callbacks=[early_stopping], verbose=1)
+except Exception as e:
+    st.error(f"Error during model training: {e}")
+    st.stop()
 
 # Predict future values using the trained LSTM model
 future_steps = 10 * 12  # Predicting 10 years (120 months)
@@ -184,30 +189,38 @@ def median_absolute_percentage_error(y_true, y_pred):
     return np.median(np.abs((y_true - y_pred) / y_true)) * 100
 
 # Evaluate LSTM model
-y_true_lstm = test_data['General index'][:future_steps].values
-y_pred_lstm = lstm_forecast['LSTM Prediction'].values
+try:
+    y_true_lstm = test_data['General index'][:future_steps].values
+    y_pred_lstm = lstm_forecast['LSTM Prediction'].values
 
-mae_lstm = mean_absolute_error(y_true_lstm, y_pred_lstm)
-mse_lstm = mean_squared_error(y_true_lstm, y_pred_lstm)
-rmse_lstm = np.sqrt(mse_lstm)
-mape_lstm = mean_absolute_percentage_error(y_true_lstm, y_pred_lstm)
-smape_lstm = symmetric_mean_absolute_percentage_error(y_true_lstm, y_pred_lstm)
-wape_lstm = weighted_absolute_percentage_error(y_true_lstm, y_pred_lstm)
-mdape_lstm = median_absolute_percentage_error(y_true_lstm, y_pred_lstm)
+    mae_lstm = mean_absolute_error(y_true_lstm, y_pred_lstm)
+    mse_lstm = mean_squared_error(y_true_lstm, y_pred_lstm)
+    rmse_lstm = np.sqrt(mse_lstm)
+    mape_lstm = mean_absolute_percentage_error(y_true_lstm, y_pred_lstm)
+    smape_lstm = symmetric_mean_absolute_percentage_error(y_true_lstm, y_pred_lstm)
+    wape_lstm = weighted_absolute_percentage_error(y_true_lstm, y_pred_lstm)
+    mdape_lstm = median_absolute_percentage_error(y_true_lstm, y_pred_lstm)
+except Exception as e:
+    st.error(f"Error calculating LSTM metrics: {e}")
+    st.stop()
 
 # Evaluate SARIMA model
-y_true_sarima = test_data['General index'][:future_steps_sarima].values
-y_pred_sarima = sarima_forecast_df['SARIMA Prediction'].values
+try:
+    y_true_sarima = test_data['General index'][:future_steps_sarima].values
+    y_pred_sarima = sarima_forecast_df['SARIMA Prediction'].values
 
-mae_sarima = mean_absolute_error(y_true_sarima, y_pred_sarima)
-mse_sarima = mean_squared_error(y_true_sarima, y_pred_sarima)
-rmse_sarima = np.sqrt(mse_sarima)
-mape_sarima = mean_absolute_percentage_error(y_true_sarima, y_pred_sarima)
-smape_sarima = symmetric_mean_absolute_percentage_error(y_true_sarima, y_pred_sarima)
-wape_sarima = weighted_absolute_percentage_error(y_true_sarima, y_pred_sarima)
-mdape_sarima = median_absolute_percentage_error(y_true_sarima, y_pred_sarima)
+    mae_sarima = mean_absolute_error(y_true_sarima, y_pred_sarima)
+    mse_sarima = mean_squared_error(y_true_sarima, y_pred_sarima)
+    rmse_sarima = np.sqrt(mse_sarima)
+    mape_sarima = mean_absolute_percentage_error(y_true_sarima, y_pred_sarima)
+    smape_sarima = symmetric_mean_absolute_percentage_error(y_true_sarima, y_pred_sarima)
+    wape_sarima = weighted_absolute_percentage_error(y_true_sarima, y_pred_sarima)
+    mdape_sarima = median_absolute_percentage_error(y_true_sarima, y_pred_sarima)
+except Exception as e:
+    st.error(f"Error calculating SARIMA metrics: {e}")
+    st.stop()
 
-# Plot the LSTM and SARIMA future predictions
+# Plot Future Predictions
 lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
     x='Generated Date:T', y='LSTM Prediction:Q'
 ).properties(
