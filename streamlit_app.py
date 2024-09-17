@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import altair as alt
-import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.statespace.sarimax import SARIMAX
@@ -186,21 +184,29 @@ st.write(lstm_forecast)
 st.write("### SARIMA Predictions for Next 3 Years")
 st.write(sarima_forecast_df[['SARIMA Prediction']])
 
-# Plot evaluation metrics
+# Plot evaluation metrics using Altair
 st.write("### Model Evaluation Metrics")
 
-metrics = pd.DataFrame({
+metrics_df = pd.DataFrame({
     "Metric": ["MAE", "MSE", "RMSE", "MAPE", "SMAPE", "WAPE", "MDAPE"],
     "LSTM": [mae_lstm, mse_lstm, rmse_lstm, mape_lstm, smape_lstm, wape_lstm, mdape_lstm],
     "SARIMA": [mae_sarima, mse_sarima, rmse_sarima, mape_sarima, smape_sarima, wape_sarima, mdape_sarima]
 })
 
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.barplot(x="Metric", y="LSTM", data=metrics, color="blue", label="LSTM", alpha=0.6)
-sns.barplot(x="Metric", y="SARIMA", data=metrics, color="green", label="SARIMA", alpha=0.6)
-plt.title("Comparison of Model Metrics (LSTM vs SARIMA)")
-plt.legend()
-st.pyplot(fig)
+metrics_melted = metrics_df.melt(id_vars="Metric", var_name="Model", value_name="Value")
+
+metrics_chart = alt.Chart(metrics_melted).mark_bar().encode(
+    x=alt.X('Metric:N', title='Metric'),
+    y=alt.Y('Value:Q', title='Value'),
+    color='Model:N',
+    tooltip=['Metric', 'Model', 'Value']
+).properties(
+    width=700,
+    height=400,
+    title="Comparison of Model Metrics (LSTM vs SARIMA)"
+)
+
+st.altair_chart(metrics_chart)
 
 # Styled metrics display
 st.write('<div class="metrics-title">Detailed Metrics Comparison</div>', unsafe_allow_html=True)
