@@ -16,7 +16,7 @@ def load_data():
 
 data = load_data()
 
-st.title("LSTM & SARIMA Forecasting of General index")
+st.title("LSTM & SARIMA Forecasting of General Index")
 
 # Display dataset preview
 st.write("### Preview of Dataset")
@@ -37,11 +37,11 @@ data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), fr
 data.set_index('Generated Date', inplace=True)
 
 # Plot historical data using Altair
-st.write("### Historical Data for General index")
+st.write("### Historical Data for General Index")
 historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
     x='Generated Date:T', y='General index:Q'
 ).properties(
-    width=700, height=400, title="Historical General index Data"
+    width=700, height=400, title="Historical General Index Data"
 )
 st.altair_chart(historical_chart)
 
@@ -146,15 +146,15 @@ mdape_sarima = median_absolute_percentage_error(y_true_sarima, y_pred_sarima)
 
 # Plot the LSTM and SARIMA future predictions
 st.write("### Future Predictions (LSTM and SARIMA)")
-lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
+lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue', strokeDash=[5,5]).encode(
     x='index:T', y='LSTM Prediction:Q'
-).properties(width=700, height=400)
+).properties(width=700, height=400, title="LSTM Predictions")
 
 sarima_chart = alt.Chart(sarima_forecast_df.reset_index()).mark_line(color='green').encode(
     x='index:T', y='SARIMA Prediction:Q'
-).properties(width=700, height=400)
+).properties(width=700, height=400, title="SARIMA Predictions")
 
-combined_chart = lstm_chart + sarima_chart
+combined_chart = alt.layer(lstm_chart, sarima_chart).resolve_scale(y='independent')
 st.altair_chart(combined_chart)
 
 # Display prediction data
