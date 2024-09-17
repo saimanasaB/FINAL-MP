@@ -7,6 +7,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.callbacks import EarlyStopping
 
 # Load the dataset
 @st.cache_data
@@ -89,17 +90,20 @@ X_train, y_train = create_sequences(train_scaled, seq_length)
 # Reshape X_train for LSTM model
 X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
 
-# Build the LSTM model
+# Build the LSTM model with tuning
 lstm_model = Sequential()
 lstm_model.add(LSTM(units=100, return_sequences=True, input_shape=(X_train.shape[1], 1)))
-lstm_model.add(Dropout(0.2))  # Dropout layer to prevent overfitting
+lstm_model.add(Dropout(0.2))
 lstm_model.add(LSTM(units=100))
-lstm_model.add(Dropout(0.2))  # Dropout layer to prevent overfitting
+lstm_model.add(Dropout(0.2))
 lstm_model.add(Dense(1))
 lstm_model.compile(optimizer='adam', loss='mean_squared_error')
 
+# Implement early stopping
+early_stopping = EarlyStopping(monitor='loss', patience=10, restore_best_weights=True)
+
 # Train the LSTM model
-lstm_model.fit(X_train, y_train, epochs=50, batch_size=32, verbose=1)
+lstm_model.fit(X_train, y_train, epochs=50, batch_size=64, callbacks=[early_stopping])
 
 # Predict future 10 years using LSTM
 future_steps = 10 * 12  # Predicting 10 years (120 months)
@@ -195,19 +199,45 @@ metrics_df = pd.DataFrame({
     "SARIMA": [mae_sarima, mse_sarima, rmse_sarima, mape_sarima, smape_sarima, wape_sarima, mdape_sarima]
 })
 
-metrics_chart = alt.Chart(metrics_df).mark_bar().encode(
-    x=alt.X('Metric:N', sort=None),
-    y='LSTM:Q',
-    color=alt.value('blue'),
-    column='Metric:N'
-).properties(width=100, height=400)
+metrics_melted = metrics_df.melt(id_vars="Metric", var_name="Model", value_name="Value")
 
-metrics_chart_sarima = alt.Chart(metrics_df).mark_bar().encode(
-    x=alt.X('Metric:N', sort=None),
-    y='SARIMA:Q',
-    color=alt.value('green'),
-    column='Metric:N'
-).properties(width=100, height=400)
+metrics_chart = alt.Chart(metrics_melted).mark_bar().encode(
+    x=alt.X('Metric:N', title='Metric'),
+    y=alt.Y('Value:Q', title='Value'),
+    color='Model:N',
+    tooltip=['Metric', 'Model', 'Value']
+).properties(
+    width=700,
+    height=400,
+    title="Comparison of Model Metrics (LSTM vs SARIMA)"
+)
 
-st.altair_chart(metrics_chart | metrics_chart_sarima)
+st.altair_chart(metrics_chart)
 
+# Styled metrics display
+st.write('<div class="metrics-title">Detailed Metrics Comparison</div>', unsafe_allow_html=True)
+st.write("#### LSTM Model Metrics")
+st.markdown(f"""
+<div class="metrics-box">
+<b>MAE:</b> {mae_lstm:.2f} <br/>
+<b>MSE:</b> {mse_lstm:.2f} <br/>
+<b>RMSE:</b> {rmse_lstm:.2f} <br/>
+<b>MAPE:</b> {mape_lstm:.2f}% <br/>
+<b>SMAPE:</b> {smape_lstm:.2f}% <br/>
+<b>WAPE:</b> {wape_lstm:.2f}% <br/>
+<b>MDAPE:</b> {mdape_lstm:.2f}% <br/>
+</div>
+""", unsafe_allow_html=True)
+
+st.write("#### SARIMA Model Metrics")
+st.markdown(f"""
+<div class="metrics-box">
+<b>MAE:</b> {mae_sarima:.2f} <br/>
+<b>MSE:</b> {mse_sarima:.2f} <br/>
+<b>RMSE:</b> {rmse_sarima:.2f} <br/>
+<b>MAPE:</b> {mape_sarima:.2f}% <br/>
+<b>SMAPE:</b> {smape_sarima:.2f}% <br/>
+<b>WAPE:</b> {wape_sarima:.2f}% <br/>
+<b>MDAPE:</b> {mdape_sarima:.2f}% <br/>
+</div>
+""", unsafe_allow_html=True)
