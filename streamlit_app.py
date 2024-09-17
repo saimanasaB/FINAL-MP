@@ -9,48 +9,6 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 
-# Custom CSS to enhance the UI
-st.markdown("""
-    <style>
-    body {
-        background-color: #f0f2f6;
-        font-family: 'Segoe UI', sans-serif;
-    }
-    .main-title {
-        font-size: 3rem;
-        color: #4A90E2;
-        text-align: center;
-        font-weight: bold;
-        margin-bottom: 20px;
-    }
-    .sub-title {
-        font-size: 1.5rem;
-        color: #4A90E2;
-        margin-top: 30px;
-        margin-bottom: 10px;
-        font-weight: bold;
-    }
-    .metrics-title {
-        color: #ff4b4b;
-        font-size: 1.2rem;
-        font-weight: bold;
-    }
-    .metrics-box {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        margin-bottom: 10px;
-    }
-    .chart-title {
-        color: #2C3E50;
-        font-size: 1.5rem;
-        text-align: center;
-        margin-top: 20px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # Load the dataset
 @st.cache_data
 def load_data():
@@ -58,14 +16,14 @@ def load_data():
 
 data = load_data()
 
-st.markdown('<div class="main-title">LSTM & SARIMA Forecasting of General Index</div>', unsafe_allow_html=True)
+st.title("LSTM & SARIMA Forecasting of General index")
 
 # Display dataset preview
-st.markdown('<div class="sub-title">Preview of Dataset</div>', unsafe_allow_html=True)
+st.write("### Preview of Dataset")
 st.write(data.head())
 
 # Display columns in the dataset
-st.markdown('<div class="sub-title">Columns in the Dataset:</div>', unsafe_allow_html=True)
+st.write("### Columns in the Dataset:")
 st.write(data.columns.tolist())
 
 # Check if 'General index' column exists
@@ -79,11 +37,11 @@ data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), fr
 data.set_index('Generated Date', inplace=True)
 
 # Plot historical data using Altair
-st.markdown('<div class="chart-title">Historical Data for General Index</div>', unsafe_allow_html=True)
-historical_chart = alt.Chart(data.reset_index()).mark_line(color='#FF5733').encode(
+st.write("### Historical Data for General index")
+historical_chart = alt.Chart(data.reset_index()).mark_line().encode(
     x='Generated Date:T', y='General index:Q'
 ).properties(
-    width=700, height=400
+    width=700, height=400, title="Historical General index Data"
 )
 st.altair_chart(historical_chart)
 
@@ -187,7 +145,7 @@ wape_sarima = weighted_absolute_percentage_error(y_true_sarima, y_pred_sarima)
 mdape_sarima = median_absolute_percentage_error(y_true_sarima, y_pred_sarima)
 
 # Plot the LSTM and SARIMA future predictions
-st.markdown('<div class="chart-title">Future Predictions (LSTM and SARIMA)</div>', unsafe_allow_html=True)
+st.write("### Future Predictions (LSTM and SARIMA)")
 lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
     x='index:T', y='LSTM Prediction:Q'
 ).properties(width=700, height=400)
@@ -200,16 +158,16 @@ combined_chart = lstm_chart + sarima_chart
 st.altair_chart(combined_chart)
 
 # Display prediction data
-st.markdown('<div class="sub-title">LSTM Predictions for Next 10 Years</div>', unsafe_allow_html=True)
+st.write("### LSTM Predictions for Next 10 Years")
 st.write(lstm_forecast)
 
-st.markdown('<div class="sub-title">SARIMA Predictions for Next 3 Years</div>', unsafe_allow_html=True)
+st.write("### SARIMA Predictions for Next 3 Years")
 st.write(sarima_forecast_df[['SARIMA Prediction']])
 
 # Metrics Display
-st.markdown('<div class="metrics-title">Model Performance Metrics</div>', unsafe_allow_html=True)
+st.write("### Model Performance Metrics")
 
-st.markdown('<div class="metrics-box"><div class="metrics-title">LSTM Model Metrics</div>', unsafe_allow_html=True)
+st.write("#### LSTM Model Metrics")
 st.write(f"MAE: {mae_lstm:.2f}")
 st.write(f"MSE: {mse_lstm:.2f}")
 st.write(f"RMSE: {rmse_lstm:.2f}")
@@ -217,9 +175,8 @@ st.write(f"MAPE: {mape_lstm:.2f}%")
 st.write(f"SMAPE: {smape_lstm:.2f}%")
 st.write(f"WAPE: {wape_lstm:.2f}%")
 st.write(f"MDAPE: {mdape_lstm:.2f}%")
-st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown('<div class="metrics-box"><div class="metrics-title">SARIMA Model Metrics</div>', unsafe_allow_html=True)
+st.write("#### SARIMA Model Metrics")
 st.write(f"MAE: {mae_sarima:.2f}")
 st.write(f"MSE: {mse_sarima:.2f}")
 st.write(f"RMSE: {rmse_sarima:.2f}")
@@ -227,4 +184,3 @@ st.write(f"MAPE: {mape_sarima:.2f}%")
 st.write(f"SMAPE: {smape_sarima:.2f}%")
 st.write(f"WAPE: {wape_sarima:.2f}%")
 st.write(f"MDAPE: {mdape_sarima:.2f}%")
-st.markdown('</div>', unsafe_allow_html=True)
