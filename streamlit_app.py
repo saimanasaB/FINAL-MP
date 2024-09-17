@@ -15,27 +15,6 @@ def load_data():
 
 data = load_data()
 
-# Apply custom CSS
-def add_css():
-    st.markdown("""
-    <style>
-    .metrics-title {
-        font-size: 28px;
-        color: #FFA500;
-        font-weight: bold;
-        text-align: center;
-    }
-    .metrics-box {
-        padding: 10px;
-        background-color: #f0f0f0;
-        border-radius: 10px;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-add_css()
-
 st.title("LSTM & SARIMA Forecasting of General index")
 
 # Display dataset preview
@@ -120,8 +99,8 @@ lstm_forecast = pd.DataFrame(predictions_lstm, index=future_dates_lstm, columns=
 sarima_model = SARIMAX(train_data['General index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
 sarima_fit = sarima_model.fit(disp=False)
 
-# Predict future 3 years using SARIMA
-future_steps_sarima = 3 * 12  # 3 years (36 months)
+# Predict future 10 years using SARIMA
+future_steps_sarima = 10 * 12  # Predicting 10 years (120 months)
 sarima_forecast = sarima_fit.get_forecast(steps=future_steps_sarima)
 sarima_forecast_df = sarima_forecast.conf_int(alpha=0.05)
 sarima_forecast_df['SARIMA Prediction'] = sarima_forecast.predicted_mean
@@ -181,57 +160,64 @@ st.altair_chart(combined_chart)
 st.write("### LSTM Predictions for Next 10 Years")
 st.write(lstm_forecast)
 
-st.write("### SARIMA Predictions for Next 3 Years")
+st.write("### SARIMA Predictions for Next 10 Years")
 st.write(sarima_forecast_df[['SARIMA Prediction']])
 
-# Plot evaluation metrics using Altair
-st.write("### Model Evaluation Metrics")
+# Metrics Display
+st.write("### Model Performance Metrics")
 
-metrics_df = pd.DataFrame({
-    "Metric": ["MAE", "MSE", "RMSE", "MAPE", "SMAPE", "WAPE", "MDAPE"],
-    "LSTM": [mae_lstm, mse_lstm, rmse_lstm, mape_lstm, smape_lstm, wape_lstm, mdape_lstm],
-    "SARIMA": [mae_sarima, mse_sarima, rmse_sarima, mape_sarima, smape_sarima, wape_sarima, mdape_sarima]
-})
-
-metrics_melted = metrics_df.melt(id_vars="Metric", var_name="Model", value_name="Value")
-
-metrics_chart = alt.Chart(metrics_melted).mark_bar().encode(
-    x=alt.X('Metric:N', title='Metric'),
-    y=alt.Y('Value:Q', title='Value'),
-    color='Model:N',
-    tooltip=['Metric', 'Model', 'Value']
-).properties(
-    width=700,
-    height=400,
-    title="Comparison of Model Metrics (LSTM vs SARIMA)"
-)
-
-st.altair_chart(metrics_chart)
-
-# Styled metrics display
-st.write('<div class="metrics-title">Detailed Metrics Comparison</div>', unsafe_allow_html=True)
 st.write("#### LSTM Model Metrics")
-st.markdown(f"""
-<div class="metrics-box">
-<b>MAE:</b> {mae_lstm:.2f} <br/>
-<b>MSE:</b> {mse_lstm:.2f} <br/>
-<b>RMSE:</b> {rmse_lstm:.2f} <br/>
-<b>MAPE:</b> {mape_lstm:.2f}% <br/>
-<b>SMAPE:</b> {smape_lstm:.2f}% <br/>
-<b>WAPE:</b> {wape_lstm:.2f}% <br/>
-<b>MDAPE:</b> {mdape_lstm:.2f}% <br/>
-</div>
-""", unsafe_allow_html=True)
+st.write(f"MAE: {mae_lstm:.2f}")
+st.write(f"MSE: {mse_lstm:.2f}")
+st.write(f"RMSE: {rmse_lstm:.2f}")
+st.write(f"MAPE: {mape_lstm:.2f}%")
+st.write(f"SMAPE: {smape_lstm:.2f}%")
+st.write(f"WAPE: {wape_lstm:.2f}%")
+st.write(f"MDAPE: {mdape_lstm:.2f}%")
 
 st.write("#### SARIMA Model Metrics")
-st.markdown(f"""
-<div class="metrics-box">
-<b>MAE:</b> {mae_sarima:.2f} <br/>
-<b>MSE:</b> {mse_sarima:.2f} <br/>
-<b>RMSE:</b> {rmse_sarima:.2f} <br/>
-<b>MAPE:</b> {mape_sarima:.2f}% <br/>
-<b>SMAPE:</b> {smape_sarima:.2f}% <br/>
-<b>WAPE:</b> {wape_sarima:.2f}% <br/>
-<b>MDAPE:</b> {mdape_sarima:.2f}% <br/>
-</div>
-""", unsafe_allow_html=True)
+st.write(f"MAE: {mae_sarima:.2f}")
+st.write(f"MSE: {mse_sarima:.2f}")
+st.write(f"RMSE: {rmse_sarima:.2f}")
+st.write(f"MAPE: {mape_sarima:.2f}%")
+st.write(f"SMAPE: {smape_sarima:.2f}%")
+st.write(f"WAPE: {wape_sarima:.2f}%")
+st.write(f"MDAPE: {mdape_sarima:.2f}%")
+
+# Custom CSS for better styling
+st.markdown("""
+    <style>
+    .metrics-title {
+        font-size: 24px;
+        font-weight: bold;
+        color: #333;
+    }
+    .metrics-box {
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        padding: 10px;
+        margin-top: 10px;
+        background-color: #f9f9f9;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Display Metrics in Styled Boxes
+st.markdown('<div class="metrics-title">LSTM Model Metrics</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">MAE: {mae_lstm:.2f}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">MSE: {mse_lstm:.2f}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">RMSE: {rmse_lstm:.2f}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">MAPE: {mape_lstm:.2f}%</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">SMAPE: {smape_lstm:.2f}%</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">WAPE: {wape_lstm:.2f}%</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">MDAPE: {mdape_lstm:.2f}%</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="metrics-title">SARIMA Model Metrics</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">MAE: {mae_sarima:.2f}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">MSE: {mse_sarima:.2f}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">RMSE: {rmse_sarima:.2f}</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">MAPE: {mape_sarima:.2f}%</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">SMAPE: {smape_sarima:.2f}%</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">WAPE: {wape_sarima:.2f}%</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="metrics-box">MDAPE: {mdape_sarima:.2f}%</div>', unsafe_allow_html=True)
+
