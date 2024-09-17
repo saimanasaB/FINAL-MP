@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import altair as alt
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_squared_error, r2_score
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
@@ -26,13 +25,16 @@ st.write(data.head())
 st.write("### Columns in the Dataset:")
 st.write(data.columns.tolist())
 
-# Check for 'General index' column
+# Skip 'Date' column check since it's not in the dataset
+# Assume we have a column for 'General index' or similar data
 if 'General index' not in data.columns:
     st.error("Error: 'General index' column not found in the dataset.")
     st.stop()
 
-# Generate a time index assuming monthly intervals
+# If there are no dates, generate a simple index for plotting purposes
+# Assume monthly frequency and starting from an arbitrary date, like '2020-01-01'
 st.write("Since no 'Date' column is provided, generating a time index assuming monthly intervals.")
+
 data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), freq='MS')
 data.set_index('Generated Date', inplace=True)
 
@@ -52,7 +54,6 @@ test_data = data['2024-01-01':]
 # Normalize the General index for LSTM
 scaler = MinMaxScaler()
 train_scaled = scaler.fit_transform(train_data[['General index']])
-test_scaled = scaler.transform(test_data[['General index']])
 
 # Prepare data for LSTM model
 def create_sequences(data, seq_length):
@@ -66,11 +67,9 @@ def create_sequences(data, seq_length):
 
 seq_length = 12  # Using 12 months (1 year) for sequence length
 X_train, y_train = create_sequences(train_scaled, seq_length)
-X_test, y_test = create_sequences(test_scaled, seq_length)
 
 # Reshape X_train for LSTM model
 X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
-X_test = np.reshape(X_test, (X_test.shape[0], X_test.shape[1], 1))
 
 # Build the LSTM model
 lstm_model = Sequential()
@@ -82,44 +81,37 @@ lstm_model.compile(optimizer='adam', loss='mean_squared_error')
 # Train the LSTM model
 lstm_model.fit(X_train, y_train, epochs=20, batch_size=32)
 
-# Make predictions using LSTM on the test set
-lstm_predictions_scaled = lstm_model.predict(X_test)
-lstm_predictions = scaler.inverse_transform(lstm_predictions_scaled)
-y_test_actual = scaler.inverse_transform(y_test.reshape(-1, 1))
+# Predict future 10 years using LSTM
+future_steps = 10 * 12  # Predicting 10 years (120 months)
+last_sequence = train_scaled[-seq_length:]
+predictions_lstm = []
 
-# Evaluation Metrics for LSTM
-lstm_mse = mean_squared_error(y_test_actual, lstm_predictions)
-lstm_rmse = np.sqrt(lstm_mse)
-lstm_r2 = r2_score(y_test_actual, lstm_predictions)
+for _ in range(future_steps):
+    pred = lstm_model.predict(np.reshape(last_sequence, (1, seq_length, 1)))
+    predictions_lstm.append(pred[0, 0])
+    last_sequence = np.append(last_sequence[1:], pred[0, 0]).reshape(seq_length, 1)
 
-st.write("### LSTM Evaluation Metrics")
-st.write(f"**MSE:** {lstm_mse}")
-st.write(f"**RMSE:** {lstm_rmse}")
-st.write(f"**R² (R-squared):** {lstm_r2}")
+# Inverse transform the predictions to original scale
+predictions_lstm = scaler.inverse_transform(np.array(predictions_lstm).reshape(-1, 1))
+
+# Create a DataFrame for LSTM future predictions
+future_dates_lstm = pd.date_range(start='2024-03-01', periods=future_steps, freq='MS')
+lstm_forecast = pd.DataFrame(predictions_lstm, index=future_dates_lstm, columns=['LSTM Prediction'])
 
 # Build the SARIMA model
 sarima_model = SARIMAX(train_data['General index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
 sarima_fit = sarima_model.fit(disp=False)
 
-# Make predictions using SARIMA on the test set
-sarima_forecast = sarima_fit.get_forecast(steps=len(test_data))
-sarima_forecast_values = sarima_forecast.predicted_mean
-sarima_forecast_df = pd.DataFrame({'SARIMA Prediction': sarima_forecast_values})
-sarima_forecast_df.index = test_data.index
-
-# Evaluation Metrics for SARIMA
-sarima_mse = mean_squared_error(test_data['General index'], sarima_forecast_values)
-sarima_rmse = np.sqrt(sarima_mse)
-sarima_r2 = r2_score(test_data['General index'], sarima_forecast_values)
-
-st.write("### SARIMA Evaluation Metrics")
-st.write(f"**MSE:** {sarima_mse}")
-st.write(f"**RMSE:** {sarima_rmse}")
-st.write(f"**R² (R-squared):** {sarima_r2}")
+# Predict future 3 years using SARIMA
+future_steps_sarima = 3 * 12  # 3 years (36 months)
+sarima_forecast = sarima_fit.get_forecast(steps=future_steps_sarima)
+sarima_forecast_df = sarima_forecast.conf_int(alpha=0.05)
+sarima_forecast_df['SARIMA Prediction'] = sarima_forecast.predicted_mean
+sarima_forecast_df.index = pd.date_range(start='2024-03-01', periods=future_steps_sarima, freq='MS')
 
 # Plot the LSTM and SARIMA future predictions
 st.write("### Future Predictions (LSTM and SARIMA)")
-lstm_chart = alt.Chart(pd.DataFrame({'index': test_data.index, 'LSTM Prediction': lstm_predictions.flatten()}).reset_index()).mark_line(color='blue').encode(
+lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
     x='index:T', y='LSTM Prediction:Q'
 ).properties(width=700, height=400)
 
@@ -131,8 +123,55 @@ combined_chart = lstm_chart + sarima_chart
 st.altair_chart(combined_chart)
 
 # Display prediction data
-st.write("### LSTM Predictions for Test Set")
-st.write(pd.DataFrame({'Actual': y_test_actual.flatten(), 'LSTM Prediction': lstm_predictions.flatten()}))
+st.write("### LSTM Predictions for Next 10 Years")
+st.write(lstm_forecast)
 
-st.write("### SARIMA Predictions for Test Set")
+st.write("### SARIMA Predictions for Next 3 Years")
 st.write(sarima_forecast_df[['SARIMA Prediction']])
+
+# LSTM Chart with tooltips
+lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
+    x=alt.X('index:T', title='Date'),
+    y=alt.Y('LSTM Prediction:Q', title='General index'),
+    tooltip=['index:T', 'LSTM Prediction:Q']
+).properties(width=700, height=400)
+
+# SARIMA Chart with tooltips
+sarima_chart = alt.Chart(sarima_forecast_df.reset_index()).mark_line(color='green').encode(
+    x=alt.X('index:T', title='Date'),
+    y=alt.Y('SARIMA Prediction:Q', title='General index'),
+    tooltip=['index:T', 'SARIMA Prediction:Q']
+).properties(width=700, height=400)
+
+combined_chart = lstm_chart + sarima_chart
+st.altair_chart(combined_chart)
+
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+import numpy as np
+
+# Function to calculate evaluation metrics
+def calculate_metrics(actual, predicted):
+    mae = mean_absolute_error(actual, predicted)
+    mse = mean_squared_error(actual, predicted)
+    rmse = np.sqrt(mse)
+    mape = np.mean(np.abs((actual - predicted) / actual)) * 100
+    smape = 100 * np.mean(2 * np.abs(actual - predicted) / (np.abs(actual) + np.abs(predicted)))
+    return mae, mse, rmse, mape, smape
+
+# Example usage for LSTM
+st.write("### LSTM Model Evaluation")
+mae, mse, rmse, mape, smape = calculate_metrics(test_data['General index'], lstm_forecast['LSTM Prediction'][:len(test_data)])
+st.write(f"MAE: {mae}")
+st.write(f"MSE: {mse}")
+st.write(f"RMSE: {rmse}")
+st.write(f"MAPE: {mape}%")
+st.write(f"SMAPE: {smape}%")
+
+# Example usage for SARIMA
+st.write("### SARIMA Model Evaluation")
+mae_sarima, mse_sarima, rmse_sarima, mape_sarima, smape_sarima = calculate_metrics(test_data['General index'], sarima_forecast_df['SARIMA Prediction'][:len(test_data)])
+st.write(f"MAE: {mae_sarima}")
+st.write(f"MSE: {mse_sarima}")
+st.write(f"RMSE: {rmse_sarima}")
+st.write(f"MAPE: {mape_sarima}%")
+st.write(f"SMAPE: {smape_sarima}%")
