@@ -1,199 +1,189 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import altair as alt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.optimizers import Adam
+import altair as alt
+import math
 
-# Custom CSS to enhance the UI
-st.markdown("""
-    <style>
-    body {
-        background-color: #f0f2f6;
-        font-family: 'Segoe UI', sans-serif;
-    }
-    .main-title {
-        font-size: 3rem;
-        color: #4A90E2;
-        text-align: center;
-        font-weight: bold;
-        margin-bottom: 20px;
-    }
-    .sub-title {
-        font-size: 1.5rem;
-        color: #4A90E2;
-        margin-top: 30px;
-        margin-bottom: 10px;
-        font-weight: bold;
-    }
-    .metrics-title {
-        color: #ff4b4b;
-        font-size: 1.2rem;
-        font-weight: bold;
-    }
-    .metrics-box {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        margin-bottom: 10px;
-    }
-    .chart-title {
-        color: #2C3E50;
-        font-size: 1.5rem;
-        text-align: center;
-        margin-top: 20px;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# Load and display the data
+st.title("LSTM Model for General Index Prediction")
+uploaded_file = "cleaned_data.csv"  # Path to the uploaded file
+if uploaded_file is not None:
+    data = pd.read_csv(uploaded_file)
+    st.write("Dataset Preview:", data.head())
 
-# Load the dataset
-@st.cache_data
-def load_data():
-    return pd.read_csv('cleaned_data.csv')
+    # Select the features to be used for prediction
+    features = ['Sector_Rural', 'Sector_Urban', 'Sector_Rural+Urban']
+    other_features = [col for col in data.columns if col not in features + ['General index']]
+    all_features = features + other_features
 
-data = load_data()
+    # Preprocess the data
+    st.subheader("Preprocessing Data")
+    scaler = MinMaxScaler(feature_range=(0, 1))
 
-st.markdown('<div class="main-title">LSTM & SARIMA Forecasting of General index</div>', unsafe_allow_html=True)
+    # Normalize the features
+    data_scaled = scaler.fit_transform(data[all_features + ['General index']])
+    st.write(f"Features used for prediction: {all_features}")
 
-# Display dataset preview
-st.markdown('<div class="sub-title">Preview of Dataset</div>', unsafe_allow_html=True)
-st.write(data.head())
+    # Prepare the input sequences
+    def create_sequences(data, n_steps=12):
+        X, y = [], []
+        for i in range(len(data) - n_steps):
+            X.append(data[i:i+n_steps, :-1])
+            y.append(data[i+n_steps, -1])
+        return np.array(X), np.array(y)
 
-# Display columns in the dataset
-st.markdown('<div class="sub-title">Columns in the Dataset:</div>', unsafe_allow_html=True)
-st.write(data.columns.tolist())
+    n_steps = 12  # Number of past months used to predict the future
+    X, y = create_sequences(data_scaled)
 
-# Check if 'General index' column exists
-if 'General index' not in data.columns:
-    st.error("Error: 'General index' column not found in the dataset.")
-    st.stop()
+    # Train-test split
+    train_size = int(len(X) * 0.8)
+    X_train, y_train = X[:train_size], y[:train_size]
+    X_test, y_test = X[train_size:], y[train_size:]
 
-# Generate a time index
-st.write("Since no 'Date' column is provided, generating a time index assuming monthly intervals.")
-data['Generated Date'] = pd.date_range(start='2020-01-01', periods=len(data), freq='MS')
-data.set_index('Generated Date', inplace=True)
+    # Hyperparameter Tuning with additional options
+    st.sidebar.subheader("Hyperparameter Tuning")
+    lstm_units = st.sidebar.slider("Number of LSTM Units", min_value=10, max_value=200, step=10, value=50)
+    batch_size = st.sidebar.slider("Batch Size", min_value=16, max_value=128, step=16, value=32)
+    epochs = st.sidebar.slider("Number of Epochs", min_value=10, max_value=100, step=10, value=20)
+    learning_rate = st.sidebar.slider("Learning Rate", min_value=0.0001, max_value=0.01, step=0.0001, value=0.001)
+    dropout_rate = st.sidebar.slider("Dropout Rate", min_value=0.0, max_value=0.5, step=0.1, value=0.2)
 
-# Plot historical data using Altair
-st.markdown('<div class="chart-title">Historical Data for General index</div>', unsafe_allow_html=True)
-historical_chart = alt.Chart(data.reset_index()).mark_line(color='#FF5733').encode(
-    x='Generated Date:T', y='General index:Q'
-).properties(
-    width=700, height=400
-)
-st.altair_chart(historical_chart)
+    # Build the LSTM model with added Dropout and configurable learning rate
+    st.subheader("Building LSTM Model")
+    model = Sequential()
+    model.add(LSTM(lstm_units, return_sequences=True, input_shape=(n_steps, len(all_features))))
+    model.add(Dropout(dropout_rate))
+    model.add(LSTM(lstm_units))
+    model.add(Dropout(dropout_rate))
+    model.add(Dense(1))
+    optimizer = Adam(learning_rate=learning_rate)
+    model.compile(optimizer=optimizer, loss='mean_squared_error')
 
-# Split data into train and test sets
-train_data = data[:'2023']
-test_data = data['2024-01-01':]
+    # Train the model
+    st.subheader("Training the LSTM Model")
+    history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), verbose=2)
 
-# Normalize the General index for LSTM
-scaler = MinMaxScaler()
-train_scaled = scaler.fit_transform(train_data[['General index']])
+    # Model Evaluation on Test Data
+    st.subheader("Model Evaluation")
+    y_test_pred = model.predict(X_test)
 
-# Prepare data for LSTM model
-def create_sequences(data, seq_length):
-    xs, ys = [], []
-    for i in range(len(data) - seq_length):
-        x = data[i:i+seq_length]
-        y = data[i+seq_length]
-        xs.append(x)
-        ys.append(y)
-    return np.array(xs), np.array(ys)
+    # Inverse scale the predictions
+    y_test_scaled_back = np.zeros((len(y_test), data_scaled.shape[1]))
+    y_test_scaled_back[:, -1] = y_test
+    y_test_true = scaler.inverse_transform(y_test_scaled_back)[:, -1]
 
-seq_length = 12  # Using 12 months (1 year) for sequence length
-X_train, y_train = create_sequences(train_scaled, seq_length)
+    y_pred_scaled_back = np.zeros((len(y_test_pred), data_scaled.shape[1]))
+    y_pred_scaled_back[:, -1] = y_test_pred[:, 0]
+    y_pred_true = scaler.inverse_transform(y_pred_scaled_back)[:, -1]
 
-# Reshape X_train for LSTM model
-X_train = np.reshape(X_train, (X_train.shape[0], X_train.shape[1], 1))
+    # Calculate MAE and RMSE
+    mae = mean_absolute_error(y_test_true, y_pred_true)
+    rmse = math.sqrt(mean_squared_error(y_test_true, y_pred_true))
 
-# Build the LSTM model
-lstm_model = Sequential()
-lstm_model.add(LSTM(units=50, return_sequences=True, input_shape=(X_train.shape[1], 1)))
-lstm_model.add(LSTM(units=50))
-lstm_model.add(Dense(1))
-lstm_model.compile(optimizer='adam', loss='mean_squared_error')
+    st.write(f"Mean Absolute Error (MAE): {mae}")
+    st.write(f"Root Mean Squared Error (RMSE): {rmse}")
 
-# Train the LSTM model
-lstm_model.fit(X_train, y_train, epochs=20, batch_size=32)
+    # Advanced Error Analysis
+    st.subheader("Error Analysis")
+    error_df = pd.DataFrame({
+        'Date': pd.date_range(start='2020-01-01', periods=len(y_test), freq='MS'),
+        'Actual': y_test_true,
+        'Predicted': y_pred_true,
+        'Error': y_test_true - y_pred_true
+    })
 
-# Predict future 10 years using LSTM
-future_steps = 10 * 12  # Predicting 10 years (120 months)
-last_sequence = train_scaled[-seq_length:]
-predictions_lstm = []
+    # Plot Actual vs Predicted
+    actual_vs_pred_chart = alt.Chart(error_df).mark_line().encode(
+        x='Date:T',
+        y='Actual:Q',
+        color=alt.value("blue")
+    ).properties(width=700, height=400).interactive()
 
-for _ in range(future_steps):
-    pred = lstm_model.predict(np.reshape(last_sequence, (1, seq_length, 1)))
-    predictions_lstm.append(pred[0, 0])
-    last_sequence = np.append(last_sequence[1:], pred[0, 0]).reshape(seq_length, 1)
+    predicted_chart = alt.Chart(error_df).mark_line().encode(
+        x='Date:T',
+        y='Predicted:Q',
+        color=alt.value("red")
+    ).properties(width=700, height=400).interactive()
 
-# Inverse transform the predictions to original scale
-predictions_lstm = scaler.inverse_transform(np.array(predictions_lstm).reshape(-1, 1))
+    st.altair_chart(actual_vs_pred_chart + predicted_chart)
 
-# Create a DataFrame for LSTM future predictions
-future_dates_lstm = pd.date_range(start='2024-03-01', periods=future_steps, freq='MS')
-lstm_forecast = pd.DataFrame(predictions_lstm, index=future_dates_lstm, columns=['LSTM Prediction'])
+    # Plot error over time
+    st.subheader("Error Over Time")
+    error_chart = alt.Chart(error_df).mark_line().encode(
+        x='Date:T',
+        y='Error:Q',
+        color=alt.value("orange")
+    ).properties(width=700, height=400).interactive()
 
-# Build the SARIMA model
-sarima_model = SARIMAX(train_data['General index'], order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
-sarima_fit = sarima_model.fit(disp=False)
+    st.altair_chart(error_chart)
 
-# Predict future 3 years using SARIMA
-future_steps_sarima = 3 * 12  # 3 years (36 months)
-sarima_forecast = sarima_fit.get_forecast(steps=future_steps_sarima)
-sarima_forecast_df = sarima_forecast.conf_int(alpha=0.05)
-sarima_forecast_df['SARIMA Prediction'] = sarima_forecast.predicted_mean
-sarima_forecast_df.index = pd.date_range(start='2024-03-01', periods=future_steps_sarima, freq='MS')
+    # Calculate variance of errors for confidence interval estimation
+    error_variance = np.var(error_df['Error'])
+    confidence_interval = 1.96 * math.sqrt(error_variance)
 
-# Metrics Calculation
-def mean_absolute_percentage_error(y_true, y_pred):
-    return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+    # Make future predictions
+    st.subheader("Making Future Predictions")
+    def predict_future(model, input_data, n_steps, future_steps):
+        predictions = []
+        input_seq = input_data[-n_steps:]
+        for _ in range(future_steps):
+            pred = model.predict(input_seq.reshape(1, n_steps, len(all_features)))
+            predictions.append(pred[0][0])
+            input_seq = np.append(input_seq[1:], pred, axis=0)
+        return np.array(predictions)
 
-def symmetric_mean_absolute_percentage_error(y_true, y_pred):
-    return np.mean(np.abs(y_true - y_pred) / (np.abs(y_true) + np.abs(y_pred))) * 100
+    # Define the prediction range (from March 2024 to March 2034, i.e., 10 years, 120 months)
+    future_steps = 120
+    future_predictions = predict_future(model, data_scaled, n_steps, future_steps)
 
-def weighted_absolute_percentage_error(y_true, y_pred):
-    return np.sum(np.abs(y_true - y_pred)) / np.sum(np.abs(y_true)) * 100
+    # Scale back the predictions to the original range
+    scaled_future_predictions = np.zeros((future_steps, data_scaled.shape[1]))
+    scaled_future_predictions[:, -1] = future_predictions  # Only setting the General index column
+    future_predictions = scaler.inverse_transform(scaled_future_predictions)[:, -1]
 
-def median_absolute_percentage_error(y_true, y_pred):
-    return np.median(np.abs((y_true - y_pred) / y_true)) * 100
+    # Prepare future dates for plotting
+    dates = pd.date_range(start='2024-03-01', periods=future_steps, freq='MS')
 
-# Evaluate LSTM model
-y_true_lstm = test_data['General index'][:future_steps].values
-y_pred_lstm = lstm_forecast['LSTM Prediction'].values
+    # Confidence Interval Calculations
+    lower_bound = future_predictions - confidence_interval
+    upper_bound = future_predictions + confidence_interval
 
-mae_lstm = mean_absolute_error(y_true_lstm, y_pred_lstm)
-mse_lstm = mean_squared_error(y_true_lstm, y_pred_lstm)
-rmse_lstm = np.sqrt(mse_lstm)
-mape_lstm = mean_absolute_percentage_error(y_true_lstm, y_pred_lstm)
-smape_lstm = symmetric_mean_absolute_percentage_error(y_true_lstm, y_pred_lstm)
-wape_lstm = weighted_absolute_percentage_error(y_true_lstm, y_pred_lstm)
-mdape_lstm = median_absolute_percentage_error(y_true_lstm, y_pred_lstm)
+    # Display predictions
+    st.subheader("Prediction Results (2024-2034)")
+    prediction_df = pd.DataFrame({'Date': dates, 'Predicted General Index': future_predictions, 
+                                  'Lower Bound': lower_bound, 'Upper Bound': upper_bound})
+    st.write(prediction_df)
 
-# Evaluate SARIMA model
-y_true_sarima = test_data['General index'][:future_steps_sarima].values
-y_pred_sarima = sarima_forecast_df['SARIMA Prediction'].values
+    # Plot predictions with confidence intervals using Altair
+    st.subheader("Predicted General Index with Confidence Intervals over Time")
+    prediction_chart = alt.Chart(prediction_df).mark_line(color='blue').encode(
+        x='Date:T',
+        y='Predicted General Index:Q'
+    )
 
-mae_sarima = mean_absolute_error(y_true_sarima, y_pred_sarima)
-mse_sarima = mean_squared_error(y_true_sarima, y_pred_sarima)
-rmse_sarima = np.sqrt(mse_sarima)
-mape_sarima = mean_absolute_percentage_error(y_true_sarima, y_pred_sarima)
-smape_sarima = symmetric_mean_absolute_percentage_error(y_true_sarima, y_pred_sarima)
-wape_sarima = weighted_absolute_percentage_error(y_true_sarima, y_pred_sarima)
-mdape_sarima = median_absolute_percentage_error(y_true_sarima, y_pred_sarima)
+    lower_bound_line = alt.Chart(prediction_df).mark_line(color='green').encode(
+        x='Date:T',
+        y='Lower Bound:Q'
+    )
 
-# Plot the LSTM and SARIMA future predictions
-st.markdown('<div class="chart-title">Future Predictions (LSTM and SARIMA)</div>', unsafe_allow_html=True)
-lstm_chart = alt.Chart(lstm_forecast.reset_index()).mark_line(color='blue').encode(
-    x='index:T', y='LSTM Prediction:Q'
-).properties(width=700, height=400)
+    upper_bound_line = alt.Chart(prediction_df).mark_line(color='red').encode(
+        x='Date:T',
+        y='Upper Bound:Q'
+    )
 
-sarima_chart = alt.Chart(sarima_forecast_df.reset_index()).mark_line(color='green').encode(
-    x='index:T', y='SARIMA Prediction:Q'
-).properties(width=700, height=400)
+    st.altair_chart(prediction_chart + lower_bound_line + upper_bound_line)
 
-combined_chart
+    # Plot Future Predicted Error with a Confidence Interval (Optional Enhancement)
+    st.subheader("Prediction Error Confidence Interval")
+    future_pred_error_chart = alt.Chart(prediction_df).mark_line().encode(
+        x='Date:T',
+        y='Predicted General Index:Q',
+        color=alt.value("green")
+    ).properties(width=700, height=400).interactive()
+
+    st.altair_chart(future_pred_error_chart)
