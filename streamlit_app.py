@@ -1,139 +1,103 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
+from keras.models import Sequential
+from keras.layers import LSTM, Dense
 import altair as alt
-import math
+from datetime import timedelta
 
-# Load and display the data
-st.title("LSTM Model for General Index Prediction")
-uploaded_file = "cleaned_data.csv"  # Path to the uploaded file
-if uploaded_file is not None:
-    data = pd.read_csv(uploaded_file)
-    st.write("Dataset Preview:", data.head())
+# Function to load data
+@st.cache
+def load_data():
+    df = pd.read_csv('cleaned_data.csv')
+    return df
 
-    # Select the features to be used for prediction
-    features = ['Sector_Rural', 'Sector_Urban', 'Sector_Rural+Urban']
-    other_features = [col for col in data.columns if col not in features + ['General index']]
-    all_features = features + other_features
-
-    # Preprocess the data
-    st.subheader("Preprocessing Data")
+# Prepare Data for LSTM
+def prepare_data(df, feature, look_back):
+    # Select the feature to predict (General index)
+    data = df[[feature]].values
+    
+    # Normalize data
     scaler = MinMaxScaler(feature_range=(0, 1))
+    data_scaled = scaler.fit_transform(data)
 
-    # Normalize the features
-    data_scaled = scaler.fit_transform(data[all_features + ['General index']])
-    st.write(f"Features used for prediction: {all_features}")
+    # Create sequences and labels
+    X, y = [], []
+    for i in range(look_back, len(data_scaled)):
+        X.append(data_scaled[i-look_back:i, 0])
+        y.append(data_scaled[i, 0])
+    
+    X, y = np.array(X), np.array(y)
+    X = np.reshape(X, (X.shape[0], X.shape[1], 1))  # Reshape for LSTM
 
-    # Prepare the input sequences
-    def create_sequences(data, n_steps=12):
-        X, y = [], []
-        for i in range(len(data) - n_steps):
-            X.append(data[i:i+n_steps, :-1])
-            y.append(data[i+n_steps, -1])
-        return np.array(X), np.array(y)
+    return X, y, scaler
 
-    n_steps = 12  # Number of past months used to predict the future
-    X, y = create_sequences(data_scaled)
-
-    # Train-test split
-    train_size = int(len(X) * 0.8)
-    X_train, y_train = X[:train_size], y[:train_size]
-    X_test, y_test = X[train_size:], y[train_size:]
-
-    # Hyperparameter Tuning
-    st.sidebar.subheader("Hyperparameter Tuning")
-    lstm_units = st.sidebar.slider("Number of LSTM Units", min_value=10, max_value=200, step=10, value=50)
-    batch_size = st.sidebar.slider("Batch Size", min_value=16, max_value=128, step=16, value=32)
-    epochs = st.sidebar.slider("Number of Epochs", min_value=10, max_value=100, step=10, value=20)
-
-    # Build the LSTM model
-    st.subheader("Building LSTM Model")
+# Build the LSTM Model
+def build_lstm_model(look_back):
     model = Sequential()
-    model.add(LSTM(lstm_units, return_sequences=True, input_shape=(n_steps, len(all_features))))
-    model.add(LSTM(lstm_units))
-    model.add(Dense(1))
+    model.add(LSTM(units=50, return_sequences=True, input_shape=(look_back, 1)))
+    model.add(LSTM(units=50))
+    model.add(Dense(units=1))
     model.compile(optimizer='adam', loss='mean_squared_error')
+    return model
 
-    # Train the model
-    st.subheader("Training the LSTM Model")
-    history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), verbose=2)
+# Predict future values
+def predict_future(model, last_sequence, num_predictions, look_back, scaler):
+    future_predictions = []
+    current_sequence = last_sequence[-look_back:]
+    
+    for _ in range(num_predictions):
+        prediction = model.predict(current_sequence.reshape(1, look_back, 1), verbose=0)
+        future_predictions.append(prediction[0][0])
+        current_sequence = np.append(current_sequence[1:], prediction)[-look_back:]
+    
+    future_predictions = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
+    return future_predictions
 
-    # Model Evaluation on Test Data
-    st.subheader("Model Evaluation")
-    y_test_pred = model.predict(X_test)
+# Streamlit App
+st.title("General Index Prediction using LSTM")
 
-    # Inverse scale the predictions
-    y_test_scaled_back = np.zeros((len(y_test), data_scaled.shape[1]))
-    y_test_scaled_back[:, -1] = y_test
-    y_test_true = scaler.inverse_transform(y_test_scaled_back)[:, -1]
+# Load data
+df = load_data()
 
-    y_pred_scaled_back = np.zeros((len(y_test_pred), data_scaled.shape[1]))
-    y_pred_scaled_back[:, -1] = y_test_pred[:, 0]
-    y_pred_true = scaler.inverse_transform(y_pred_scaled_back)[:, -1]
+# Select the feature for prediction
+feature = 'General index'
 
-    # Calculate MAE and RMSE
-    mae = mean_absolute_error(y_test_true, y_pred_true)
-    rmse = math.sqrt(mean_squared_error(y_test_true, y_pred_true))
+# Display Data
+st.write("Data Overview")
+st.write(df.head())
 
-    st.write(f"Mean Absolute Error (MAE): {mae}")
-    st.write(f"Root Mean Squared Error (RMSE): {rmse}")
+# Prepare data for training
+look_back = 60  # Look-back period of 60 time steps
+X, y, scaler = prepare_data(df, feature, look_back)
 
-    # Plot Actual vs Predicted
-    st.subheader("Actual vs Predicted General Index (Test Data)")
-    test_dates = pd.date_range(start='2020-01-01', periods=len(y_test), freq='MS')  # Example start date for test data
-    test_df = pd.DataFrame({'Date': test_dates, 'Actual': y_test_true, 'Predicted': y_pred_true})
+# Build and train the model
+model = build_lstm_model(look_back)
+model.fit(X, y, epochs=10, batch_size=32, verbose=2)
 
-    actual_vs_pred_chart = alt.Chart(test_df).mark_line().encode(
-        x='Date:T',
-        y='Actual:Q',
-        color=alt.value("blue")
-    ).properties(width=700, height=400).interactive()
+# Predict from March 2024 to March 2034 (10 years)
+start_date = pd.to_datetime('2024-03-01')
+end_date = pd.to_datetime('2034-03-01')
+num_predictions = (end_date - start_date).days // 30  # Approximate months in between
 
-    predicted_chart = alt.Chart(test_df).mark_line().encode(
-        x='Date:T',
-        y='Predicted:Q',
-        color=alt.value("red")
-    ).properties(width=700, height=400).interactive()
+last_sequence = X[-1]
+future_predictions = predict_future(model, last_sequence, num_predictions, look_back, scaler)
 
-    st.altair_chart(actual_vs_pred_chart + predicted_chart)
+# Create a dataframe for the future predictions
+future_dates = pd.date_range(start=start_date, periods=num_predictions, freq='M')
+future_df = pd.DataFrame({'Date': future_dates, 'Predicted General Index': future_predictions.flatten()})
 
-    # Make future predictions
-    st.subheader("Making Future Predictions")
-    def predict_future(model, input_data, n_steps, future_steps):
-        predictions = []
-        input_seq = input_data[-n_steps:]
-        for _ in range(future_steps):
-            pred = model.predict(input_seq.reshape(1, n_steps, len(all_features)))
-            predictions.append(pred[0][0])
-            input_seq = np.append(input_seq[1:], pred, axis=0)
-        return np.array(predictions)
+# Display future predictions
+st.write("Future Predictions from March 2024 to March 2034")
+st.write(future_df)
 
-    # Define the prediction range (from March 2024 to March 2034, i.e., 10 years, 120 months)
-    future_steps = 120
-    future_predictions = predict_future(model, data_scaled, n_steps, future_steps)
-
-    # Scale back the predictions to the original range
-    scaled_future_predictions = np.zeros((future_steps, data_scaled.shape[1]))
-    scaled_future_predictions[:, -1] = future_predictions  # Only setting the General index column
-    future_predictions = scaler.inverse_transform(scaled_future_predictions)[:, -1]
-
-    # Prepare future dates for plotting
-    dates = pd.date_range(start='2024-03-01', periods=future_steps, freq='MS')
-
-    # Display predictions
-    st.subheader("Prediction Results (2024-2034)")
-    prediction_df = pd.DataFrame({'Date': dates, 'Predicted General Index': future_predictions})
-    st.write(prediction_df)
-
-    # Plot predictions using Altair
-    st.subheader("Predicted General Index over Time")
-    prediction_chart = alt.Chart(prediction_df).mark_line().encode(
-        x='Date:T',
-        y='Predicted General Index:Q'
-    ).properties(width=700, height=400)
-
-    st.altair_chart(prediction_chart)
+# Visualize future predictions using Altair
+chart = alt.Chart(future_df).mark_line().encode(
+    x='Date:T',
+    y='Predicted General Index:Q'
+).properties(
+    title="Predicted General Index (2024-2034)"
+)
+st.altair_chart(chart, use_container_width=True)
