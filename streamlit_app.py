@@ -8,7 +8,7 @@ import altair as alt
 
 # Load and display the data
 st.title("LSTM Model for General Index Prediction")
-uploaded_file = "/mnt/data/cleaned_data.csv"  # Path to the uploaded file
+uploaded_file = "cleaned_data.csv"  # Path to the uploaded file
 if uploaded_file is not None:
     data = pd.read_csv(uploaded_file)
     st.write("Dataset Preview:", data.head())
