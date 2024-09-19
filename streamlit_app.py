@@ -2,9 +2,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 import altair as alt
+import math
 
 # Load and display the data
 st.title("LSTM Model for General Index Prediction")
@@ -42,17 +44,62 @@ if uploaded_file is not None:
     X_train, y_train = X[:train_size], y[:train_size]
     X_test, y_test = X[train_size:], y[train_size:]
 
+    # Hyperparameter Tuning
+    st.sidebar.subheader("Hyperparameter Tuning")
+    lstm_units = st.sidebar.slider("Number of LSTM Units", min_value=10, max_value=200, step=10, value=50)
+    batch_size = st.sidebar.slider("Batch Size", min_value=16, max_value=128, step=16, value=32)
+    epochs = st.sidebar.slider("Number of Epochs", min_value=10, max_value=100, step=10, value=20)
+
     # Build the LSTM model
     st.subheader("Building LSTM Model")
     model = Sequential()
-    model.add(LSTM(50, return_sequences=True, input_shape=(n_steps, len(all_features))))
-    model.add(LSTM(50))
+    model.add(LSTM(lstm_units, return_sequences=True, input_shape=(n_steps, len(all_features))))
+    model.add(LSTM(lstm_units))
     model.add(Dense(1))
     model.compile(optimizer='adam', loss='mean_squared_error')
 
     # Train the model
     st.subheader("Training the LSTM Model")
-    model.fit(X_train, y_train, epochs=20, batch_size=32, validation_data=(X_test, y_test))
+    history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, validation_data=(X_test, y_test), verbose=2)
+
+    # Model Evaluation on Test Data
+    st.subheader("Model Evaluation")
+    y_test_pred = model.predict(X_test)
+
+    # Inverse scale the predictions
+    y_test_scaled_back = np.zeros((len(y_test), data_scaled.shape[1]))
+    y_test_scaled_back[:, -1] = y_test
+    y_test_true = scaler.inverse_transform(y_test_scaled_back)[:, -1]
+
+    y_pred_scaled_back = np.zeros((len(y_test_pred), data_scaled.shape[1]))
+    y_pred_scaled_back[:, -1] = y_test_pred[:, 0]
+    y_pred_true = scaler.inverse_transform(y_pred_scaled_back)[:, -1]
+
+    # Calculate MAE and RMSE
+    mae = mean_absolute_error(y_test_true, y_pred_true)
+    rmse = math.sqrt(mean_squared_error(y_test_true, y_pred_true))
+
+    st.write(f"Mean Absolute Error (MAE): {mae}")
+    st.write(f"Root Mean Squared Error (RMSE): {rmse}")
+
+    # Plot Actual vs Predicted
+    st.subheader("Actual vs Predicted General Index (Test Data)")
+    test_dates = pd.date_range(start='2020-01-01', periods=len(y_test), freq='MS')  # Example start date for test data
+    test_df = pd.DataFrame({'Date': test_dates, 'Actual': y_test_true, 'Predicted': y_pred_true})
+
+    actual_vs_pred_chart = alt.Chart(test_df).mark_line().encode(
+        x='Date:T',
+        y='Actual:Q',
+        color=alt.value("blue")
+    ).properties(width=700, height=400).interactive()
+
+    predicted_chart = alt.Chart(test_df).mark_line().encode(
+        x='Date:T',
+        y='Predicted:Q',
+        color=alt.value("red")
+    ).properties(width=700, height=400).interactive()
+
+    st.altair_chart(actual_vs_pred_chart + predicted_chart)
 
     # Make future predictions
     st.subheader("Making Future Predictions")
