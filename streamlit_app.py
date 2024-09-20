@@ -69,6 +69,10 @@ for train_index, test_index in kf.split(X):
     X_train, X_test = X[train_index], X[test_index]
     y_train, y_test = y[train_index], y[test_index]
 
+    # Check shapes
+    st.write(f"X_train shape: {X_train.shape}")
+    st.write(f"y_train shape: {y_train.shape}")
+
     # Building the LSTM model
     model = Sequential()
     model.add(LSTM(lstm_units, return_sequences=False, input_shape=(X_train.shape[1], X_train.shape[2])))
@@ -78,9 +82,11 @@ for train_index, test_index in kf.split(X):
     model.compile(optimizer='adam', loss='mean_squared_error')
 
     # Train the model with user-defined hyperparameters
-    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
+    st.write("Training the LSTM model...")
+    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=1)
 
     # Predicting on the test data
+    st.write("Evaluating the model on test data...")
     predictions = model.predict(X_test)
 
     # Inverse transform the test predictions to the original scale
@@ -114,7 +120,7 @@ model.add(Dense(1))  # Output layer to predict the 'General index'
 model.compile(optimizer='adam', loss='mean_squared_error')
 
 # Fit the model on the entire dataset
-model.fit(X, y, epochs=epochs, batch_size=batch_size, verbose=0)
+model.fit(X, y, epochs=epochs, batch_size=batch_size, verbose=1)
 
 # Forecasting
 future_steps = 120  # 10 years of monthly data
