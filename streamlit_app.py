@@ -19,15 +19,22 @@ data = pd.read_csv('cleaned_data.csv')
 st.subheader('Data Preview')
 st.write(data.head())
 
-# Assuming 'General index' is the target feature and the rest are predictors
-features = data.columns.drop(['General index'])
+# Ensure all columns except 'General index' are numeric before applying MinMaxScaler
+numeric_data = data.select_dtypes(include=[np.number])
+
+# Check if 'General index' exists in the numeric data, if not add it
+if 'General index' not in numeric_data.columns:
+    numeric_data['General index'] = pd.to_numeric(data['General index'], errors='coerce')
+
+# Drop any rows with NaN values that might have been introduced
+numeric_data = numeric_data.dropna()
 
 # Prepare data for LSTM
 st.write("Preparing data for LSTM...")
 
-# Scaling the data
+# Scaling the numeric data
 scaler = MinMaxScaler(feature_range=(0, 1))
-scaled_data = scaler.fit_transform(data)
+scaled_data = scaler.fit_transform(numeric_data)
 
 # Split the data into input features (X) and target (y)
 X = scaled_data[:, :-1]  # All features except 'General index'
