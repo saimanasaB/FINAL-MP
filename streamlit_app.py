@@ -30,9 +30,8 @@ st.write(data.head())
 # Ensure all columns except 'General index' are numeric before applying StandardScaler
 numeric_data = data.select_dtypes(include=[np.number])
 
-# Check if 'General index' exists in the numeric data
-if 'General index' not in numeric_data.columns:
-    numeric_data['General index'] = pd.to_numeric(data['General index'], errors='coerce')
+# Convert 'General index' to numeric if not already
+numeric_data['General index'] = pd.to_numeric(numeric_data['General index'], errors='coerce')
 
 # Drop any rows with NaN values that might have been introduced
 numeric_data = numeric_data.dropna()
