@@ -7,7 +7,6 @@ from tensorflow.keras.layers import LSTM, Dense
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import altair as alt
-import matplotlib.pyplot as plt
 
 # Load Data
 st.title('LSTM Forecasting of General Index')
@@ -70,7 +69,7 @@ st.subheader('Evaluation Metrics')
 st.write(f"Mean Squared Error (MSE): {mse}")
 st.write(f"Mean Absolute Error (MAE): {mae}")
 
-# Plot actual vs predicted values for test data
+# Plot actual vs predicted values for test data using Altair
 test_df = pd.DataFrame({
     'Date': pd.date_range(start='2024-03-01', periods=len(y_test_scaled_back), freq='MS'),
     'Actual': y_test_scaled_back,
