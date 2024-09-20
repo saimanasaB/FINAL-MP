@@ -15,6 +15,9 @@ st.write('Forecasting from March 2024 to March 2034')
 # Load the cleaned CSV file directly
 data = pd.read_csv('cleaned_data.csv')
 
+# Drop the 'sector' column
+data = data.drop(columns=['sector'], errors='ignore')
+
 # Display the first few rows of the data
 st.subheader('Data Preview')
 st.write(data.head())
@@ -22,7 +25,7 @@ st.write(data.head())
 # Ensure all columns except 'General index' are numeric before applying MinMaxScaler
 numeric_data = data.select_dtypes(include=[np.number])
 
-# Check if 'General index' exists in the numeric data, if not add it
+# Check if 'General index' exists in the numeric data
 if 'General index' not in numeric_data.columns:
     numeric_data['General index'] = pd.to_numeric(data['General index'], errors='coerce')
 
@@ -56,9 +59,13 @@ model.add(Dense(1))  # Output layer to predict the 'General index'
 # Compile the model
 model.compile(optimizer='adam', loss='mean_squared_error')
 
-# Train the model
+# Add hyperparameter inputs
+epochs = st.sidebar.number_input('Select number of epochs', min_value=1, max_value=100, value=10)
+batch_size = st.sidebar.number_input('Select batch size', min_value=1, max_value=64, value=16)
+
+# Train the model with user-defined hyperparameters
 st.write("Training the LSTM model...")
-model.fit(X_train, y_train, epochs=10, batch_size=16, verbose=2)
+history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=2)
 
 # Predicting on the test data
 st.write("Evaluating the model on test data...")
