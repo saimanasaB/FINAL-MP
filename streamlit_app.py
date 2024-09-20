@@ -23,6 +23,12 @@ if 'General index' not in data.columns:
 # Drop the 'sector' column
 data = data.drop(columns=['sector'], errors='ignore')
 
+# Feature Engineering: Add month and year features
+data['Date'] = pd.date_range(start='2024-03-01', periods=len(data), freq='MS')
+data['Month'] = data['Date'].dt.month
+data['Year'] = data['Date'].dt.year
+data = data.drop(columns=['Date'])  # Drop Date if not needed for model
+
 # Display the first few rows of the data
 st.subheader('Data Preview')
 st.write(data.head())
@@ -55,7 +61,8 @@ split_index = int(len(X) * 0.8)
 X_train, X_test = X[:split_index], X[split_index:]
 y_train, y_test = y[:split_index], y[split_index:]
 
-# Add hyperparameter inputs
+# Add hyperparameter inputs for tuning
+st.sidebar.header('Hyperparameter Tuning')
 epochs = st.sidebar.number_input('Select number of epochs', min_value=1, max_value=100, value=10)
 batch_size = st.sidebar.number_input('Select batch size', min_value=1, max_value=64, value=16)
 lstm_units = st.sidebar.number_input('Select LSTM units', min_value=1, max_value=128, value=50)
