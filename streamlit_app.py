@@ -104,10 +104,53 @@ st.subheader('Cross-Validation Results')
 st.write(f"Average Mean Squared Error (MSE): {avg_mse:.4f}")
 st.write(f"Average Mean Absolute Error (MAE): {avg_mae:.4f}")
 
-# Optionally, you can continue with training on the entire dataset and forecasting
-# ...
+# Forecasting future values from March 2024 to March 2034
+st.write("Forecasting the 'General index'...")
 
-# You can add the forecasting code here if needed
+# Train on the full dataset for forecasting
+model = Sequential()
+model.add(LSTM(lstm_units, return_sequences=False, input_shape=(X.shape[1], X.shape[2])))
+model.add(Dense(1))  # Output layer to predict the 'General index'
+model.compile(optimizer='adam', loss='mean_squared_error')
+
+# Fit the model on the entire dataset
+model.fit(X, y, epochs=epochs, batch_size=batch_size, verbose=0)
+
+# Forecasting
+future_steps = 120  # 10 years of monthly data
+forecast_input = X[-1].reshape(1, 1, X.shape[2])
+
+forecasted_values = []
+for step in range(future_steps):
+    forecast = model.predict(forecast_input)
+    forecasted_values.append(forecast[0, 0])
+    next_input = np.append(forecast_input[0, 0, 1:], forecast)
+    forecast_input = next_input.reshape(1, 1, X.shape[2])
+
+# Inverse transform the forecasted values to the original scale of 'General index'
+forecasted_values = np.array(forecasted_values).reshape(-1, 1)
+forecasted_values_scaled_back = scaler_general_index.inverse_transform(forecasted_values)
+
+# Create future dates
+future_dates = pd.date_range(start='2024-03-01', periods=future_steps, freq='MS')
+
+# Create a dataframe with the forecasted results
+forecast_df = pd.DataFrame({
+    'Date': future_dates,
+    'Forecasted General index': forecasted_values_scaled_back.flatten()
+})
+
+# Display forecasted values
+st.subheader('Forecasted General Index')
+st.write(forecast_df)
+
+# Plot the forecasted values using Altair
+st.subheader('Forecast Plot')
+forecast_chart = alt.Chart(forecast_df).mark_line().encode(
+    x='Date:T',
+    y='Forecasted General index:Q'
+)
+st.altair_chart(forecast_chart, use_container_width=True)
 
 # Display a message indicating completion
-st.write("Cross-validation completed. Adjust the hyperparameters to improve model performance.")
+st.write("Cross-validation and forecasting completed. Adjust the hyperparameters to improve model performance.")
