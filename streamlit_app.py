@@ -6,7 +6,6 @@ from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
-from sklearn.model_selection import KFold
 import altair as alt
 
 # Load Data
@@ -50,97 +49,65 @@ y = scaled_data[:, -1]  # 'General index'
 # Reshaping input for LSTM [samples, time steps, features]
 X = X.reshape((X.shape[0], 1, X.shape[1]))
 
+# Split the data into training and test sets
+split_index = int(len(X) * 0.8)
+X_train, X_test = X[:split_index], X[split_index:]
+y_train, y_test = y[:split_index], y[split_index:]
+
 # Add hyperparameter inputs
 epochs = st.sidebar.number_input('Select number of epochs', min_value=1, max_value=100, value=10)
 batch_size = st.sidebar.number_input('Select batch size', min_value=1, max_value=64, value=16)
 lstm_units = st.sidebar.number_input('Select LSTM units', min_value=1, max_value=128, value=50)
-n_splits = st.sidebar.number_input('Select number of folds for cross-validation', min_value=2, max_value=10, value=5)
 
-# Initialize KFold
-kf = KFold(n_splits=n_splits)
+# Building the LSTM model
+model = Sequential()
+model.add(LSTM(lstm_units, return_sequences=False, input_shape=(X_train.shape[1], X_train.shape[2])))
+model.add(Dense(1))  # Output layer to predict the 'General index'
 
-# Store evaluation metrics for each fold
-mse_list = []
-mae_list = []
+# Compile the model
+model.compile(optimizer='adam', loss='mean_squared_error')
 
-# Store predictions for actual vs predicted plot
-all_y_test = []
-all_predictions = []
+# Train the model with user-defined hyperparameters
+st.write("Training the LSTM model...")
+history = model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=2)
 
-# Cross-validation
-st.write("Running cross-validation...")
-for train_index, test_index in kf.split(X):
-    X_train, X_test = X[train_index], X[test_index]
-    y_train, y_test = y[train_index], y[test_index]
+# Plot training loss
+st.subheader('Training Loss')
+st.line_chart(history.history['loss'])
 
-    # Check shapes
-    st.write(f"X_train shape: {X_train.shape}")
-    st.write(f"y_train shape: {y_train.shape}")
+# Predicting on the test data
+st.write("Evaluating the model on test data...")
+predictions = model.predict(X_test)
 
-    # Building the LSTM model
-    model = Sequential()
-    model.add(LSTM(lstm_units, return_sequences=False, input_shape=(X_train.shape[1], X_train.shape[2])))
-    model.add(Dense(1))  # Output layer to predict the 'General index'
+# Inverse transform the test predictions to the original scale
+scaler_general_index = StandardScaler()
+scaler_general_index.fit(numeric_data[['General index']])
+test_predictions_scaled_back = scaler_general_index.inverse_transform(predictions)
+y_test_scaled_back = scaler_general_index.inverse_transform(y_test.reshape(-1, 1))
 
-    # Compile the model
-    model.compile(optimizer='adam', loss='mean_squared_error')
+# Evaluation metrics
+mse = mean_squared_error(y_test_scaled_back, test_predictions_scaled_back)
+mae = mean_absolute_error(y_test_scaled_back, test_predictions_scaled_back)
 
-    # Train the model with user-defined hyperparameters
-    st.write("Training the LSTM model...")
-    model.fit(X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=1)
-
-    # Predicting on the test data
-    st.write("Evaluating the model on test data...")
-    predictions = model.predict(X_test)
-
-    # Store the predictions for plotting later
-    all_y_test.append(y_test)
-    all_predictions.append(predictions)
-
-    # Inverse transform the test predictions to the original scale
-    scaler_general_index = StandardScaler()
-    scaler_general_index.fit(numeric_data[['General index']])
-    test_predictions_scaled_back = scaler_general_index.inverse_transform(predictions)
-    y_test_scaled_back = scaler_general_index.inverse_transform(y_test.reshape(-1, 1))
-
-    # Calculate evaluation metrics
-    mse = mean_squared_error(y_test_scaled_back, test_predictions_scaled_back)
-    mae = mean_absolute_error(y_test_scaled_back, test_predictions_scaled_back)
-
-    mse_list.append(mse)
-    mae_list.append(mae)
-
-# Average metrics over all folds
-avg_mse = np.mean(mse_list)
-avg_mae = np.mean(mae_list)
-
-st.subheader('Cross-Validation Results')
-st.write(f"Average Mean Squared Error (MSE): {avg_mse:.4f}")
-st.write(f"Average Mean Absolute Error (MAE): {avg_mae:.4f}")
-
-# Combine all predictions and true values for the plot
-y_test_combined = np.concatenate(all_y_test, axis=0)
-predictions_combined = np.concatenate(all_predictions, axis=0)
-
-# Inverse transform combined data
-y_test_scaled_back_combined = scaler_general_index.inverse_transform(y_test_combined.reshape(-1, 1))
-predictions_scaled_back_combined = scaler_general_index.inverse_transform(predictions_combined)
+st.subheader('Evaluation Metrics')
+st.write(f"Mean Squared Error (MSE): {mse:.4f}")
+st.write(f"Mean Absolute Error (MAE): {mae:.4f}")
 
 # Plot actual vs predicted values for test data using Altair
 test_df = pd.DataFrame({
-    'Index': np.arange(len(y_test_scaled_back_combined)),
-    'Actual': y_test_scaled_back_combined.flatten(),
-    'Predicted': predictions_scaled_back_combined.flatten()
+    'Date': pd.date_range(start='2024-03-01', periods=len(y_test_scaled_back), freq='MS'),
+    'Actual': y_test_scaled_back.flatten(),
+    'Predicted': test_predictions_scaled_back.flatten()
 })
 
-st.subheader('Actual vs Predicted on Test Data (Cross-Validation)')
+st.subheader('Actual vs Predicted on Test Data')
 chart = alt.Chart(test_df).mark_line().encode(
-    x=alt.X('Index', title='Index'),
-    y='Actual',
+    x=alt.X('Date:T', axis=alt.Axis(tickCount=10)),
+    y='Actual:Q',
     color=alt.value('blue')
 ) + alt.Chart(test_df).mark_line().encode(
-    x=alt.X('Index', title='Index'),
-    y='Predicted',
+    x=alt.X('Date:T', axis=alt.Axis(tickCount=10)),
+    y='Predicted:Q',
     color=alt.value('red')
 )
 st.altair_chart(chart, use_container_width=True)
@@ -148,16 +115,6 @@ st.altair_chart(chart, use_container_width=True)
 # Forecasting future values from March 2024 to March 2034
 st.write("Forecasting the 'General index'...")
 
-# Train on the full dataset for forecasting
-model = Sequential()
-model.add(LSTM(lstm_units, return_sequences=False, input_shape=(X.shape[1], X.shape[2])))
-model.add(Dense(1))  # Output layer to predict the 'General index'
-model.compile(optimizer='adam', loss='mean_squared_error')
-
-# Fit the model on the entire dataset
-model.fit(X, y, epochs=epochs, batch_size=batch_size, verbose=1)
-
-# Forecasting
 future_steps = 120  # 10 years of monthly data
 forecast_input = X[-1].reshape(1, 1, X.shape[2])
 
@@ -191,7 +148,3 @@ forecast_chart = alt.Chart(forecast_df).mark_line().encode(
     x='Date:T',
     y='Forecasted General index:Q'
 )
-st.altair_chart(forecast_chart, use_container_width=True)
-
-# Display a message indicating completion
-st.write("Cross-validation, actual vs predicted plot, and forecasting completed. Adjust the hyperparameters to improve model performance.")
