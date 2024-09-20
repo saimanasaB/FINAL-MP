@@ -148,3 +148,4 @@ forecast_chart = alt.Chart(forecast_df).mark_line().encode(
     x='Date:T',
     y='Forecasted General index:Q'
 )
+st.altair_chart(forecast_chart, use_container_width=True)
