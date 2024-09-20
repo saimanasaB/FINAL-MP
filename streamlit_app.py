@@ -96,11 +96,11 @@ test_df = pd.DataFrame({
 
 st.subheader('Actual vs Predicted on Test Data')
 chart = alt.Chart(test_df).mark_line().encode(
-    x='Date:T',
+    x=alt.X('Date:T', axis=alt.Axis(tickCount=10)),  # Increase the number of ticks
     y='Actual:Q',
     color=alt.value('blue')
 ) + alt.Chart(test_df).mark_line().encode(
-    x='Date:T',
+    x=alt.X('Date:T', axis=alt.Axis(tickCount=10)),  # Same for predicted
     y='Predicted:Q',
     color=alt.value('red')
 )
