@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 import altair as alt
 
@@ -22,7 +22,7 @@ data = data.drop(columns=['sector'], errors='ignore')
 st.subheader('Data Preview')
 st.write(data.head())
 
-# Ensure all columns except 'General index' are numeric before applying MinMaxScaler
+# Ensure all columns except 'General index' are numeric before applying StandardScaler
 numeric_data = data.select_dtypes(include=[np.number])
 
 # Check if 'General index' exists in the numeric data
@@ -35,8 +35,8 @@ numeric_data = numeric_data.dropna()
 # Prepare data for LSTM
 st.write("Preparing data for LSTM...")
 
-# Scaling the numeric data
-scaler = MinMaxScaler(feature_range=(0, 1))
+# Scaling the numeric data using StandardScaler
+scaler = StandardScaler()
 scaled_data = scaler.fit_transform(numeric_data)
 
 # Split the data into input features (X) and target (y)
@@ -72,7 +72,8 @@ st.write("Evaluating the model on test data...")
 predictions = model.predict(X_test)
 
 # Inverse transform the test predictions to the original scale
-scaler_general_index = MinMaxScaler(feature_range=(0, 1))
+# Use StandardScaler to inverse transform
+scaler_general_index = StandardScaler()
 scaler_general_index.fit(numeric_data[['General index']])
 
 test_predictions_scaled_back = scaler_general_index.inverse_transform(predictions)
