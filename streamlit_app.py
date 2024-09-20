@@ -63,6 +63,10 @@ kf = KFold(n_splits=n_splits)
 mse_list = []
 mae_list = []
 
+# Store predictions for actual vs predicted plot
+all_y_test = []
+all_predictions = []
+
 # Cross-validation
 st.write("Running cross-validation...")
 for train_index, test_index in kf.split(X):
@@ -89,6 +93,10 @@ for train_index, test_index in kf.split(X):
     st.write("Evaluating the model on test data...")
     predictions = model.predict(X_test)
 
+    # Store the predictions for plotting later
+    all_y_test.append(y_test)
+    all_predictions.append(predictions)
+
     # Inverse transform the test predictions to the original scale
     scaler_general_index = StandardScaler()
     scaler_general_index.fit(numeric_data[['General index']])
@@ -109,6 +117,33 @@ avg_mae = np.mean(mae_list)
 st.subheader('Cross-Validation Results')
 st.write(f"Average Mean Squared Error (MSE): {avg_mse:.4f}")
 st.write(f"Average Mean Absolute Error (MAE): {avg_mae:.4f}")
+
+# Combine all predictions and true values for the plot
+y_test_combined = np.concatenate(all_y_test, axis=0)
+predictions_combined = np.concatenate(all_predictions, axis=0)
+
+# Inverse transform combined data
+y_test_scaled_back_combined = scaler_general_index.inverse_transform(y_test_combined.reshape(-1, 1))
+predictions_scaled_back_combined = scaler_general_index.inverse_transform(predictions_combined)
+
+# Plot actual vs predicted values for test data using Altair
+test_df = pd.DataFrame({
+    'Index': np.arange(len(y_test_scaled_back_combined)),
+    'Actual': y_test_scaled_back_combined.flatten(),
+    'Predicted': predictions_scaled_back_combined.flatten()
+})
+
+st.subheader('Actual vs Predicted on Test Data (Cross-Validation)')
+chart = alt.Chart(test_df).mark_line().encode(
+    x=alt.X('Index', title='Index'),
+    y='Actual',
+    color=alt.value('blue')
+) + alt.Chart(test_df).mark_line().encode(
+    x=alt.X('Index', title='Index'),
+    y='Predicted',
+    color=alt.value('red')
+)
+st.altair_chart(chart, use_container_width=True)
 
 # Forecasting future values from March 2024 to March 2034
 st.write("Forecasting the 'General index'...")
@@ -159,4 +194,4 @@ forecast_chart = alt.Chart(forecast_df).mark_line().encode(
 st.altair_chart(forecast_chart, use_container_width=True)
 
 # Display a message indicating completion
-st.write("Cross-validation and forecasting completed. Adjust the hyperparameters to improve model performance.")
+st.write("Cross-validation, actual vs predicted plot, and forecasting completed. Adjust the hyperparameters to improve model performance.")
