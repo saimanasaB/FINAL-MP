@@ -64,13 +64,16 @@ model.fit(X_train, y_train, epochs=10, batch_size=16, verbose=2)
 st.write("Evaluating the model on test data...")
 predictions = model.predict(X_test)
 
-# Inverse transform to get back to original scale
-test_data_scaled_back = scaler.inverse_transform(np.hstack((X_test.reshape(X_test.shape[0], X_test.shape[2]), predictions)))
-y_test_scaled_back = scaler.inverse_transform(np.hstack((X_test.reshape(X_test.shape[0], X_test.shape[2]), y_test.reshape(-1, 1))))[:, -1]
+# Inverse transform the test predictions to the original scale
+scaler_general_index = MinMaxScaler(feature_range=(0, 1))
+scaler_general_index.fit(numeric_data[['General index']])
+
+test_predictions_scaled_back = scaler_general_index.inverse_transform(predictions)
+y_test_scaled_back = scaler_general_index.inverse_transform(y_test.reshape(-1, 1))
 
 # Evaluation metrics
-mse = mean_squared_error(y_test_scaled_back, test_data_scaled_back[:, -1])
-mae = mean_absolute_error(y_test_scaled_back, test_data_scaled_back[:, -1])
+mse = mean_squared_error(y_test_scaled_back, test_predictions_scaled_back)
+mae = mean_absolute_error(y_test_scaled_back, test_predictions_scaled_back)
 
 st.subheader('Evaluation Metrics')
 st.write(f"Mean Squared Error (MSE): {mse}")
@@ -79,8 +82,8 @@ st.write(f"Mean Absolute Error (MAE): {mae}")
 # Plot actual vs predicted values for test data using Altair
 test_df = pd.DataFrame({
     'Date': pd.date_range(start='2024-03-01', periods=len(y_test_scaled_back), freq='MS'),
-    'Actual': y_test_scaled_back,
-    'Predicted': test_data_scaled_back[:, -1]
+    'Actual': y_test_scaled_back.flatten(),
+    'Predicted': test_predictions_scaled_back.flatten()
 })
 
 st.subheader('Actual vs Predicted on Test Data')
@@ -109,11 +112,9 @@ for step in range(future_steps):
     next_input = np.append(forecast_input[0, 0, 1:], forecast)
     forecast_input = next_input.reshape(1, 1, X.shape[2])
 
-# Inverse transform to get back to original scale
+# Inverse transform the forecasted values to the original scale of 'General index'
 forecasted_values = np.array(forecasted_values).reshape(-1, 1)
-forecasted_values_scaled_back = scaler.inverse_transform(
-    np.hstack((scaled_data[:, :-1], forecasted_values))
-)[:, -1]
+forecasted_values_scaled_back = scaler_general_index.inverse_transform(forecasted_values)
 
 # Create future dates
 future_dates = pd.date_range(start='2024-03-01', periods=future_steps, freq='MS')
@@ -121,7 +122,7 @@ future_dates = pd.date_range(start='2024-03-01', periods=future_steps, freq='MS'
 # Create a dataframe with the forecasted results
 forecast_df = pd.DataFrame({
     'Date': future_dates,
-    'Forecasted General index': forecasted_values_scaled_back
+    'Forecasted General index': forecasted_values_scaled_back.flatten()
 })
 
 # Display forecasted values
